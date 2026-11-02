@@ -5,7 +5,7 @@
 
 A free raster paint program for Windows and Linux, inspired by Paint.NET's simple layout. It adds pixel-art and animation tools, can be extended with mods, and comes in English and Brazilian Portuguese.
 
-**[Download the Windows installer](https://github.com/YuriShimoi/david/releases/latest/download/david-1.2.0-setup.exe)** (v1.2.0, 4 MB, no admin rights needed)
+**[Download the Windows installer](https://github.com/YuriShimoi/david/releases/latest/download/david-1.2.0-setup.exe)** (v1.2.0, 6 MB, no admin rights needed)
 
 Other downloads are on the [release page](https://github.com/YuriShimoi/david/releases/latest):
 

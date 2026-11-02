@@ -5,7 +5,7 @@
 
 Um programa gratuito de pintura para Windows e Linux, inspirado no layout simples do Paint.NET. Ele traz ferramentas de pixel art e animação, pode ser estendido com mods e está disponível em inglês e português do Brasil.
 
-**[Baixar o instalador para Windows](https://github.com/YuriShimoi/david/releases/latest/download/david-1.2.0-setup.exe)** (v1.2.0, 4 MB, não precisa de administrador)
+**[Baixar o instalador para Windows](https://github.com/YuriShimoi/david/releases/latest/download/david-1.2.0-setup.exe)** (v1.2.0, 6 MB, não precisa de administrador)
 
 Os outros downloads estão na [página de releases](https://github.com/YuriShimoi/david/releases/latest):
 
