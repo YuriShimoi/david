@@ -344,57 +344,6 @@ private:
 };
 #pragma endregion
 
-#pragma region [ Contour ]
-// A freehand outline filled with the color on release (LibreSprite's contour)
-class ContourTool : public Tool {
-public:
-  ContourTool() : Tool(ETool::Contour, ICON_TB_SCRIBBLE, N_("Contour"), ImGuiKey_U) {}
-
-  void down(ToolHost&, const ToolInput& in) override { _pts = { { in.x, in.y } }; _button = in.button; _active = true; }
-  void drag(ToolHost& h, const ToolInput& in) override {
-    if(!_active) return;
-    double z = h.nav().view.zoom;
-    const Point& last = _pts.back();
-    if(std::abs(last.x - in.x) * z >= 1 || std::abs(last.y - in.y) * z >= 1) _pts.push_back({ in.x, in.y });
-  }
-  void up(ToolHost& h, const ToolInput& in) override {
-    if(!_active) return;
-    _active = false;
-    if(_pts.size() < 3) { _pts.clear(); return; }
-    Document& doc = h.doc();
-    auto area = fillContours(doc.width(), doc.height(), { _pts }, h.settings().antialias);
-    ToolInput press = in;
-    press.button = _button;
-    auto st = makeStroke(h, EInk::Paint, press, false);
-    IRect b = area->bounds();
-    std::vector<uint8_t> row(std::max(b.width(), 0));
-    for(int y = b.y0; y <= b.y1; y++) {
-      area->readRow(y, b.x0, b.x1, row.data());
-      for(int i = 0; i < b.width(); i++) if(row[i]) st->cover(b.x0 + i, y, row[i]);
-    }
-    if(auto edit = st->finish(name, icon)) doc.history.push(doc, std::move(edit));
-    _pts.clear();
-  }
-  bool busy() const override { return _active; }
-  void cancel(ToolHost&) override { _active = false; _pts.clear(); }
-
-  void overlay(ToolHost& h, ImDrawList* dl, const ToolInput&) override {
-    if(!_active) return;
-    float phase = float(ImGui::GetTime() * 8);
-    for(size_t i = 0; i < _pts.size(); i++) {
-      const Point& a = _pts[i];
-      const Point& b = _pts[(i + 1) % _pts.size()];
-      antsLine(dl, h.toScreen(a.x, a.y), h.toScreen(b.x, b.y), phase, h.dpi());
-    }
-  }
-
-private:
-  std::vector<Point> _pts;
-  int _button = SDL_BUTTON_LEFT;
-  bool _active = false;
-};
-#pragma endregion
-
 #pragma region [ Paint bucket ]
 class BucketTool : public Tool {
 public:
@@ -585,6 +534,5 @@ private:
 #pragma endregion
 
 std::unique_ptr<Tool> makeModTool(const ModTool& def) { return std::make_unique<ModBrushTool>(def); }
-std::unique_ptr<Tool> makeContour() { return std::make_unique<ContourTool>(); }
 
 }

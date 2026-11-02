@@ -195,7 +195,6 @@ void App::selftestStep(int frame) {
         use(ETool::Gradient);
         _cfg.tools.gradType = 0;
         _cfg.tools.gradSpace = int(EGradSpace::Oklab);
-        _cfg.tools.gradDither = int(EDither::BlueNoise);
         _primary = BLACK; _secondary = WHITE;
         dragImg(0, 350, 599, 350);
         break;
@@ -306,7 +305,7 @@ void App::selftestStep(int frame) {
     }
   }
 
-  // Round 4 (phase 5): symmetry, tiled wrap, pixel-perfect, shading, outline, autotile, spray, contour
+  // Round 4 (phase 5): symmetry, tiled wrap, pixel-perfect, shading, outline, autotile, spray, free polygon
   if(_round4 && frame > _round4) {
     int f = frame - _round4;
     auto at = [&](double x, double y) { return toScreen(x + 0.5, y + 0.5); };
@@ -422,17 +421,20 @@ void App::selftestStep(int frame) {
         int dots = 0;
         for(int y = 40; y <= 60; y++) for(int x = 90; x <= 110; x++) dots += imgPx(x, y) == BLACK;
         check("spray keeps adding dots while held", dots > 60 && _doc->history.count() == 1 && imgPx(100, 80) == WHITE);
-        use(ETool::Contour);
+        use(ETool::Shapes);
+        t.shapeKind = int(EShapeKind::Free);
+        t.shapeDraw = 1;
         ImVec2 a = at(20, 20), b = at(60, 20), c = at(40, 60);
         push(SDL_EVENT_MOUSE_MOTION, a.x, a.y, 0);
         push(SDL_EVENT_MOUSE_BUTTON_DOWN, a.x, a.y, SDL_BUTTON_LEFT);
         push(SDL_EVENT_MOUSE_MOTION, b.x, b.y, 0);
         push(SDL_EVENT_MOUSE_MOTION, c.x, c.y, 0);
         push(SDL_EVENT_MOUSE_BUTTON_UP, c.x, c.y, SDL_BUTTON_LEFT);
+        key(SDLK_RETURN, SDL_SCANCODE_RETURN);
         break;
       }
       case 28:
-        check("contour fills the outline", imgPx(40, 30) == BLACK && imgPx(25, 50) == WHITE && _doc->history.count() == 2);
+        check("free polygon fills the outline", imgPx(40, 30) == BLACK && imgPx(25, 50) == WHITE && _doc->history.count() == 2);
         // The pixel-art view for the screenshot
         t.symmetry = 3; t.tiled = 3; t.grid = true; t.gridW = 25; t.gridH = 25;
         _cfg.showTilePreview = true; _cfg.showPalette = true;

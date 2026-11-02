@@ -3,6 +3,15 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - Unreleased
+
+### Changed
+- Version 1.1.0.
+- The Contour tool (U) is now the Free polygon option of the Shapes tool (A cycles to it): drawn freehand, then it keeps the box handles to move and resize until Enter, with outline, fill or both like the other shapes.
+
+### Removed
+- The gradient tool's dither select: plain gradients render smooth, and Pixel art mode keeps its Bayer pattern.
+
 ## [1.0.0] - 2026-11-01
 
 ### Added

@@ -584,7 +584,7 @@ std::unique_ptr<Tool> makeWand() { return std::make_unique<WandTool>(); }
 std::unique_ptr<Tool> makeMovePixels() { return std::make_unique<MoveTool>(true); }
 std::unique_ptr<Tool> makeMoveSelection() { return std::make_unique<MoveTool>(false); }
 
-std::unique_ptr<Tool> makeMouse(), makeBrush(), makeEraser(), makePencil(), makeBucket(), makePicker(), makeZoom(), makePan(), makeSpray(), makeContour();
+std::unique_ptr<Tool> makeMouse(), makeBrush(), makeEraser(), makePencil(), makeBucket(), makePicker(), makeZoom(), makePan(), makeSpray();
 std::unique_ptr<Tool> makeGradient(), makeLine(), makeCurve(), makeShapes(), makeText();
 
 std::vector<std::unique_ptr<Tool>> createTools() {
@@ -604,7 +604,6 @@ std::vector<std::unique_ptr<Tool>> createTools() {
   list.push_back(makeEraser());
   list.push_back(makePencil());
   list.push_back(makeSpray());
-  list.push_back(makeContour());
   list.push_back(makeText());
   list.push_back(makeLine());
   list.push_back(makeCurve());

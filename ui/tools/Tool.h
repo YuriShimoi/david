@@ -15,7 +15,7 @@ struct Theme;
 enum class ETool : uint8_t {
   RectSelect, Lasso, EllipseSelect, PolyLasso, MovePixels, MoveSelection,
   Zoom, Pan, Bucket, Brush, Eraser, Pencil, Picker,
-  MagicWand, Gradient, Line, Shapes, Text, Mouse, Curve, Spray, Contour, Mod, COUNT
+  MagicWand, Gradient, Line, Shapes, Text, Mouse, Curve, Spray, Mod, COUNT
 };
 
 // The pointer over the canvas: system cursors, or the tool's own icon
@@ -56,7 +56,6 @@ struct ToolSettings {
   // Gradient
   int gradType = 0;
   int gradSpace = 2;  // OKLab
-  int gradDither = 0;
   bool gradAlpha = false;
   bool gradPixel = false;
   // Line and shapes

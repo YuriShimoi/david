@@ -25,7 +25,8 @@ void cubicTo(Polyline& out, Point p0, Point c0, Point c1, Point p1);
 #pragma endregion
 
 #pragma region [ Shapes ]
-enum class EShapeKind : uint8_t { Rect, RoundRect, Ellipse, Polygon, COUNT };
+// Free is drawn freehand by the Shapes tool; shapeContour returns nothing for it
+enum class EShapeKind : uint8_t { Rect, RoundRect, Ellipse, Polygon, Free, COUNT };
 // A closed contour inside the box (x0, y0)-(x1, y1), inset by `inset` pixels on every side
 Polyline shapeContour(EShapeKind kind, double x0, double y0, double x1, double y1, double inset, double radius, int sides);
 #pragma endregion

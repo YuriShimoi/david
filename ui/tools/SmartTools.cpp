@@ -114,8 +114,6 @@ public:
     changed |= combo("##space", s.gradSpace, { N_("sRGB"), N_("Linear RGB"), N_("OKLab"), N_("OKLCH shorter hue"), N_("OKLCH longer hue") },
                      140 * dpi, N_("Interpolation"));
     ImGui::SameLine();
-    changed |= combo("##dither", s.gradDither, { N_("No dither"), N_("Bayer 4×4"), N_("Blue noise") }, 110 * dpi, N_("Dithering"));
-    ImGui::SameLine();
     changed |= toggle(ICON_TB_DROPLET_OFF, s.gradAlpha, N_("Transparency mode"));
     ImGui::SameLine();
     changed |= toggle(ICON_TB_GRID_DOTS, s.gradPixel, N_("Pixel art (stop colors only)"));
@@ -149,7 +147,6 @@ private:
     GradientSpec g;
     g.type = EGradType(std::clamp(s.gradType, 0, int(EGradType::COUNT) - 1));
     g.space = EGradSpace(std::clamp(s.gradSpace, 0, int(EGradSpace::COUNT) - 1));
-    g.dither = EDither(std::clamp(s.gradDither, 0, int(EDither::COUNT) - 1));
     g.alphaMode = s.gradAlpha;
     g.pixelArt = s.gradPixel;
     g.a = _a; g.b = _b;
@@ -548,6 +545,7 @@ private:
 #pragma region [ Shapes ]
 // Drag a box; Shift keeps it square. The corners and the body stay draggable until Enter or a click away.
 // Outline uses the primary color, fill the secondary one when both are drawn (Paint.NET).
+// Free polygon: the outline is drawn freehand, then gets the same box handles.
 class ShapesTool : public Tool {
 public:
   ShapesTool() : Tool(ETool::Shapes, ICON_TB_TRIANGLE_SQUARE_CIRCLE, N_("Shapes"), ImGuiKey_O) {}
@@ -572,11 +570,21 @@ public:
     _primary = h.color(!right); _secondary = h.color(right);
     _a = _b = _fixed = p;
     _mode = 5;
+    _drawing = kind(h) == EShapeKind::Free;
+    _free.clear();
+    if(_drawing) _free.push_back(p);
   }
 
   void drag(ToolHost& h, const ToolInput& in) override {
     if(_mode < 0) return;
     Point p{ in.x, in.y };
+    if(_drawing) {
+      double z = h.nav().view.zoom;
+      const Point& last = _free.back();
+      if(std::abs(last.x - p.x) * z >= 1 || std::abs(last.y - p.y) * z >= 1) _free.push_back(p);
+      render(h);
+      return;
+    }
     if(_mode == 4) {
       double dx = p.x - _grab.x, dy = p.y - _grab.y;
       _a.x += dx; _a.y += dy; _b.x += dx; _b.y += dy;
@@ -604,12 +612,18 @@ public:
     bool fresh = _mode == 5;
     _mode = -1;
     double z = h.nav().view.zoom;
+    if(_drawing) {
+      _drawing = false;
+      if(!fitFree(z)) cancel(h);
+      return;
+    }
     if(fresh && (std::abs(_b.x - _a.x) * z < 2 || std::abs(_b.y - _a.y) * z < 2)) cancel(h);
   }
 
   bool busy() const override { return _edit.active() || _mode >= 0; }
 
   ECursor cursor(ToolHost& h, const ToolInput& at) override {
+    if(_drawing) return ECursor::Cross;
     if(_mode >= 0 && _mode != 5) return ECursor::Move;
     if(!_edit.active()) return ECursor::Cross;
     if(nubAt(h, at) >= 0) return ECursor::Move;
@@ -617,7 +631,7 @@ public:
     return inside ? ECursor::Move : ECursor::Cross;
   }
   void commit(ToolHost& h) override { _edit.commit(h.doc(), name, icon); _mode = -1; }
-  void cancel(ToolHost& h) override { _edit.cancel(); _mode = -1; h.doc().onChanged(); }
+  void cancel(ToolHost& h) override { _edit.cancel(); _mode = -1; _drawing = false; _free.clear(); h.doc().onChanged(); }
 
   bool onKey(ToolHost& h, ImGuiKey k) override {
     if(!_edit.active()) return false;
@@ -639,6 +653,12 @@ public:
   void overlay(ToolHost& h, ImDrawList* dl, const ToolInput& at) override {
     if(!_edit.active()) return;
     float dpi = h.dpi();
+    if(_drawing) {
+      float phase = float(ImGui::GetTime() * 8);
+      for(size_t i = 0; i < _free.size(); i++)
+        antsLine(dl, h.toScreen(_free[i].x, _free[i].y), h.toScreen(_free[(i + 1) % _free.size()].x, _free[(i + 1) % _free.size()].y), phase, dpi);
+      return;
+    }
     ImVec2 c[4];
     for(int i = 0; i < 4; i++) c[i] = h.toScreen(corner(i).x, corner(i).y);
     for(int i = 0; i < 4; i++) antsLine(dl, c[i], c[(i + 1) % 4], 0, dpi);
@@ -658,7 +678,8 @@ public:
     bool changed = false;
     struct Kind { const char* icon; const char* tip; };
     static const Kind kinds[] = { { ICON_TB_SQUARE, N_("Rectangle (A)") }, { ICON_TB_SQUARE_ROUNDED, N_("Rounded rectangle (A)") },
-                                  { ICON_TB_CIRCLE, N_("Ellipse (A)") }, { ICON_TB_PENTAGON, N_("Polygon (A)") } };
+                                  { ICON_TB_CIRCLE, N_("Ellipse (A)") }, { ICON_TB_PENTAGON, N_("Polygon (A)") },
+                                  { ICON_TB_SCRIBBLE, N_("Free polygon (A)") } };
     for(int i = 0; i < int(EShapeKind::COUNT); i++) {
       bool on = s.shapeKind == i;
       if(toggle(kinds[i].icon, on, kinds[i].tip)) { s.shapeKind = i; changed = true; }
@@ -694,10 +715,42 @@ private:
   uint32_t _primary = 0, _secondary = 0;
   int _mode = -1;  // 0-3 corner, 4 move, 5 new, 6-9 edge
   std::pair<bool, bool> _globals{};
+  Polyline _free;  // Free polygon points, 0-1 in the box (absolute while drawing)
+  bool _drawing = false;
 
   Point _fixed{};
 
+  static EShapeKind kind(ToolHost& h) { return EShapeKind(std::clamp(h.settings().shapeKind, 0, int(EShapeKind::COUNT) - 1)); }
+
+  // Fits the box to the drawn points and makes them relative to it; false when too small to keep
+  bool fitFree(double zoom) {
+    if(_free.size() < 3) return false;
+    Point lo = _free[0], hi = _free[0];
+    for(auto& q : _free) {
+      lo = { std::min(lo.x, q.x), std::min(lo.y, q.y) };
+      hi = { std::max(hi.x, q.x), std::max(hi.y, q.y) };
+    }
+    if((hi.x - lo.x) * zoom < 2 || (hi.y - lo.y) * zoom < 2) return false;
+    for(auto& q : _free) q = { (q.x - lo.x) / (hi.x - lo.x), (q.y - lo.y) / (hi.y - lo.y) };
+    _a = lo; _b = hi;
+    return true;
+  }
+
+  // The box itself when the shape was switched to free after drawing another kind
+  Polyline freeContour() const {
+    if(_drawing) return _free;
+    static const Polyline box{ { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
+    Polyline out;
+    for(auto& q : _free.empty() ? box : _free) out.push_back({ _a.x + (_b.x - _a.x) * q.x, _a.y + (_b.y - _a.y) * q.y });
+    return out;
+  }
+
   void normalize() {
+    // A mirrored box flips the free points, so the shape stays where it is
+    for(auto& q : _free) {
+      if(_a.x > _b.x) q.x = 1 - q.x;
+      if(_a.y > _b.y) q.y = 1 - q.y;
+    }
     Point a{ std::min(_a.x, _b.x), std::min(_a.y, _b.y) }, b{ std::max(_a.x, _b.x), std::max(_a.y, _b.y) };
     _a = a; _b = b;
   }
@@ -734,14 +787,24 @@ private:
     Document& doc = h.doc();
     auto& s = h.settings();
     TileRecorder& rec = _edit.redraw(doc);
-    EShapeKind kind = EShapeKind(std::clamp(s.shapeKind, 0, int(EShapeKind::COUNT) - 1));
+    EShapeKind k = kind(h);
     double w = std::max(1, s.brushSize);
-    Polyline outer = shapeContour(kind, _a.x, _a.y, _b.x, _b.y, 0, s.cornerRadius, s.polySides);
+    bool isFree = k == EShapeKind::Free;
+    Polyline outer = isFree ? freeContour() : shapeContour(k, _a.x, _a.y, _b.x, _b.y, 0, s.cornerRadius, s.polySides);
     if(outer.size() >= 3) {
-      Polyline inner = shapeContour(kind, _a.x, _a.y, _b.x, _b.y, w, s.cornerRadius, s.polySides);
       auto fill = fillContours(doc.width(), doc.height(), { outer }, s.antialias);
       std::unique_ptr<Mask> line;
-      if(s.shapeDraw != 1) line = inner.size() >= 3 ? fillContours(doc.width(), doc.height(), { outer, inner }, s.antialias) : fill->clone();
+      if(s.shapeDraw != 1 && isFree) {
+        // A free outline has no inset contour: a stroke twice as wide, kept inside the fill
+        line = std::make_unique<Mask>(doc.width(), doc.height());
+        Polyline loop = outer;
+        loop.push_back(outer.front());
+        strokePolyline(*line, loop, w * 2, s.antialias);
+        line->combine(*fill, ECombine::Intersect);
+      } else if(s.shapeDraw != 1) {
+        Polyline inner = shapeContour(k, _a.x, _a.y, _b.x, _b.y, w, s.cornerRadius, s.polySides);
+        line = inner.size() >= 3 ? fillContours(doc.width(), doc.height(), { outer, inner }, s.antialias) : fill->clone();
+      }
       if(s.shapeDraw == 0) paintCoverage(doc, rec, { { line.get(), _primary } });
       else if(s.shapeDraw == 1) paintCoverage(doc, rec, { { fill.get(), _primary } });
       else paintCoverage(doc, rec, { { fill.get(), _secondary }, { line.get(), _primary } });

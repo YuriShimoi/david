@@ -22,7 +22,7 @@ static json toJson(const Settings& s) {
     { "selectThenMove", t.selectThenMove },
     { "wandGlobal", t.wandGlobal }, { "classicRgb", t.classicRgb }, { "softEdges", t.softEdges }, { "edgeStop", t.edgeStop },
     { "edgeThreshold", t.edgeThreshold }, { "fillOutline", t.fillOutline },
-    { "gradType", t.gradType }, { "gradSpace", t.gradSpace }, { "gradDither", t.gradDither }, { "gradAlpha", t.gradAlpha }, { "gradPixel", t.gradPixel },
+    { "gradType", t.gradType }, { "gradSpace", t.gradSpace }, { "gradAlpha", t.gradAlpha }, { "gradPixel", t.gradPixel },
     { "dash", t.dash }, { "arrowStart", t.arrowStart }, { "arrowEnd", t.arrowEnd }, { "pixelPerfect", t.pixelPerfect }, { "replaceAlpha", t.replaceAlpha }, { "lineSharp", t.lineSharp },
     { "shapeKind", t.shapeKind }, { "shapeDraw", t.shapeDraw }, { "polySides", t.polySides }, { "cornerRadius", t.cornerRadius },
     { "fontFamily", t.fontFamily }, { "fontSize", t.fontSize }, { "bold", t.bold }, { "italic", t.italic }, { "textAlign", t.textAlign },
@@ -86,7 +86,7 @@ bool Settings::load(const std::string& path, std::string& error) {
     read(*t, "selectThenMove", ts.selectThenMove);
     read(*t, "wandGlobal", ts.wandGlobal); read(*t, "classicRgb", ts.classicRgb); read(*t, "softEdges", ts.softEdges);
     read(*t, "edgeStop", ts.edgeStop); read(*t, "edgeThreshold", ts.edgeThreshold); read(*t, "fillOutline", ts.fillOutline);
-    read(*t, "gradType", ts.gradType); read(*t, "gradSpace", ts.gradSpace); read(*t, "gradDither", ts.gradDither);
+    read(*t, "gradType", ts.gradType); read(*t, "gradSpace", ts.gradSpace);
     read(*t, "gradAlpha", ts.gradAlpha); read(*t, "gradPixel", ts.gradPixel);
     read(*t, "dash", ts.dash); read(*t, "arrowStart", ts.arrowStart); read(*t, "arrowEnd", ts.arrowEnd);
     read(*t, "pixelPerfect", ts.pixelPerfect); read(*t, "replaceAlpha", ts.replaceAlpha); read(*t, "lineSharp", ts.lineSharp);
@@ -100,8 +100,8 @@ bool Settings::load(const std::string& path, std::string& error) {
     ts.gridW = std::clamp(ts.gridW, 1, 4096); ts.gridH = std::clamp(ts.gridH, 1, 4096);
     ts.sprayDensity = std::clamp(ts.sprayDensity, 1, 500);
     ts.edgeThreshold = std::clamp(ts.edgeThreshold, 0.01f, 1.f);
-    ts.gradType = std::clamp(ts.gradType, 0, 6); ts.gradSpace = std::clamp(ts.gradSpace, 0, 4); ts.gradDither = std::clamp(ts.gradDither, 0, 2);
-    ts.dash = std::clamp(ts.dash, 0, 2); ts.shapeKind = std::clamp(ts.shapeKind, 0, 3); ts.shapeDraw = std::clamp(ts.shapeDraw, 0, 2);
+    ts.gradType = std::clamp(ts.gradType, 0, 6); ts.gradSpace = std::clamp(ts.gradSpace, 0, 4);
+    ts.dash = std::clamp(ts.dash, 0, 2); ts.shapeKind = std::clamp(ts.shapeKind, 0, 4); ts.shapeDraw = std::clamp(ts.shapeDraw, 0, 2);
     ts.polySides = std::clamp(ts.polySides, 3, 24); ts.cornerRadius = std::clamp(ts.cornerRadius, 0.f, 2000.f);
     ts.fontSize = std::clamp(ts.fontSize, 1.f, 1000.f); ts.textAlign = std::clamp(ts.textAlign, 0, 2);
     ts.selectMode = ECombine(std::clamp(mode, 0, 4));
