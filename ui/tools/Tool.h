@@ -15,7 +15,7 @@ struct Theme;
 enum class ETool : uint8_t {
   RectSelect, Lasso, EllipseSelect, PolyLasso, MovePixels, MoveSelection,
   Zoom, Pan, Bucket, Brush, Eraser, Pencil, Picker,
-  MagicWand, Gradient, Line, Shapes, Text, Mouse, Curve, Spray, Mod, COUNT
+  MagicWand, Gradient, Line, Shapes, Text, Mouse, Curve, Spray, Node, Mod, COUNT
 };
 
 // The pointer over the canvas: system cursors, or the tool's own icon
@@ -107,6 +107,8 @@ public:
   virtual ImFont* previewFont(const std::string& path, int index) = 0;
   virtual void switchBack() = 0;
   virtual void useTool(ETool id) = 0;
+  // Vector support is on (Beta tools) and the active layer is a vector layer: drawing tools make objects
+  virtual bool vectorMode() = 0;
 };
 
 class Tool {

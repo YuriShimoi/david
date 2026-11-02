@@ -53,7 +53,7 @@ static json toJson(const Settings& s) {
     { "loop", a.loop }, { "playTag", a.playTag }, { "previewZoom", a.previewZoom },
   };
   j["shortcuts"] = s.shortcuts;
-  j["beta"] = { { "vector", s.betaVector } };
+  j["beta"] = { { "vector", s.betaVector }, { "pixelPreview", s.vectorPixels }, { "rasterEdit", s.vectorRaster } };
   j["mods"] = s.mods;
   j["toolStrip"] = { { "order", s.toolOrder }, { "hidden", s.hiddenTools } };
   j["modWindows"] = s.modWindows;
@@ -141,7 +141,10 @@ bool Settings::load(const std::string& path, std::string& error) {
     s.onionOpacity = std::clamp(s.onionOpacity, 5, 90); s.loop = std::clamp(s.loop, 0, 2); s.previewZoom = std::clamp(s.previewZoom, 0, 16);
   }
   read(j, "shortcuts", shortcuts);
-  if(auto b = j.find("beta"); b != j.end() && b->is_object()) read(*b, "vector", betaVector);
+  if(auto b = j.find("beta"); b != j.end() && b->is_object()) {
+    read(*b, "vector", betaVector); read(*b, "pixelPreview", vectorPixels); read(*b, "rasterEdit", vectorRaster);
+    vectorRaster = std::clamp(vectorRaster, 0, 2);
+  }
   read(j, "mods", mods);
   if(auto ts = j.find("toolStrip"); ts != j.end() && ts->is_object()) {
     read(*ts, "order", toolOrder);

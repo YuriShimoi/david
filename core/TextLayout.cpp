@@ -1,7 +1,9 @@
 #include "core/TextLayout.h"
+#include "core/Vector.h"
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_SYNTHESIS_H
+#include FT_OUTLINE_H
 #include <hb.h>
 #include <hb-ft.h>
 #include <algorithm>
@@ -143,5 +145,110 @@ TextBlock layoutText(const std::u32string& text, const TextStyle& style, double 
   FT_Set_Transform(ft, nullptr, nullptr);
   return out;
 }
+
+#pragma region [ Outlines ]
+// Glyph outlines for vector text: the same shaping and line layout as layoutText, as Bezier paths
+std::vector<Subpath> textOutline(const VecObject& o) {
+  std::vector<Subpath> out;
+  TextStyle style;
+  style.path = o.font; style.index = o.fontIndex; style.size = float(o.size);
+  style.synthBold = o.bold; style.synthItalic = o.italic; style.align = o.align;
+  std::u32string text;
+  // UTF-8 to UTF-32
+  for(size_t i = 0; i < o.text.size();) {
+    unsigned char c = o.text[i];
+    int n = c < 0x80 ? 1 : c < 0xE0 ? 2 : c < 0xF0 ? 3 : 4;
+    char32_t cp = n == 1 ? c : n == 2 ? c & 0x1F : n == 3 ? c & 0x0F : c & 0x07;
+    for(int k = 1; k < n && i + k < o.text.size(); k++) cp = (cp << 6) | (o.text[i + k] & 0x3F);
+    text += cp;
+    i += n;
+  }
+  // The layout gives the lines and carets; a 1×1 mask keeps it from rasterizing anything visible
+  TextBlock block = layoutText(text, style, o.x, o.y, 1, 1);
+  Face* face = fonts().get(style.path, style.index);
+  if(!block.ok || !face) return out;
+  FT_Face ft = face->ft;
+  FT_Set_Char_Size(ft, 0, FT_F26Dot6(std::max(style.size, 1.f) * 64), 72, 72);
+  double ascent = ft->size->metrics.ascender / 64.0;
+  FT_Matrix shear{ 0x10000, FT_Fixed(0.2126 * 0x10000), 0, 0x10000 };
+  FT_Set_Transform(ft, style.synthItalic ? &shear : nullptr, nullptr);
+
+  struct Ctx { std::vector<Subpath>* out; double ox, oy; Point last; };
+  auto pt = [](const Ctx& c, const FT_Vector* v) { return Point{ c.ox + v->x / 64.0, c.oy - v->y / 64.0 }; };
+  FT_Outline_Funcs funcs{};
+  funcs.move_to = [](const FT_Vector* to, void* u) {
+    auto& c = *static_cast<Ctx*>(u);
+    Point p{ c.ox + to->x / 64.0, c.oy - to->y / 64.0 };
+    c.out->push_back({ { PathNode::corner(p) }, true });
+    c.last = p;
+    return 0;
+  };
+  funcs.line_to = [](const FT_Vector* to, void* u) {
+    auto& c = *static_cast<Ctx*>(u);
+    Point p{ c.ox + to->x / 64.0, c.oy - to->y / 64.0 };
+    c.out->back().nodes.push_back(PathNode::corner(p));
+    c.last = p;
+    return 0;
+  };
+  funcs.conic_to = [](const FT_Vector* ctl, const FT_Vector* to, void* u) {
+    auto& c = *static_cast<Ctx*>(u);
+    Point q{ c.ox + ctl->x / 64.0, c.oy - ctl->y / 64.0 }, p{ c.ox + to->x / 64.0, c.oy - to->y / 64.0 };
+    // Quadratic to cubic: handles at 2/3 toward the control point
+    auto& nodes = c.out->back().nodes;
+    nodes.back().out = { c.last.x + (q.x - c.last.x) * 2 / 3, c.last.y + (q.y - c.last.y) * 2 / 3 };
+    nodes.push_back({ p, { p.x + (q.x - p.x) * 2 / 3, p.y + (q.y - p.y) * 2 / 3 }, p, ENodeType::Corner });
+    c.last = p;
+    return 0;
+  };
+  funcs.cubic_to = [](const FT_Vector* c1, const FT_Vector* c2, const FT_Vector* to, void* u) {
+    auto& c = *static_cast<Ctx*>(u);
+    Point p{ c.ox + to->x / 64.0, c.oy - to->y / 64.0 };
+    auto& nodes = c.out->back().nodes;
+    nodes.back().out = { c.ox + c1->x / 64.0, c.oy - c1->y / 64.0 };
+    nodes.push_back({ p, { c.ox + c2->x / 64.0, c.oy - c2->y / 64.0 }, p, ENodeType::Corner });
+    c.last = p;
+    return 0;
+  };
+  (void)pt;
+
+  // The glyphs again, placed by the layout's carets (first caret of each cluster) and baseline
+  size_t start = 0;
+  for(const TextLine& line : block.lines) {
+    std::u32string part = text.substr(line.start, line.end - line.start);
+    if(!part.empty()) {
+      hb_buffer_t* buf = hb_buffer_create();
+      hb_buffer_add_utf32(buf, reinterpret_cast<const uint32_t*>(part.data()), int(part.size()), 0, int(part.size()));
+      hb_buffer_guess_segment_properties(buf);
+      hb_shape(face->hb, buf, nullptr, 0);
+      unsigned n = 0;
+      hb_glyph_info_t* info = hb_buffer_get_glyph_infos(buf, &n);
+      hb_glyph_position_t* pos = hb_buffer_get_glyph_positions(buf, &n);
+      double pen = line.carets.front();
+      double baseline = line.y + ascent;
+      for(unsigned i = 0; i < n; i++) {
+        if(!FT_Load_Glyph(ft, info[i].codepoint, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING) && ft->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+          if(style.synthBold) FT_Outline_Embolden(&ft->glyph->outline, FT_Pos(style.size * 64 / 24));
+          Ctx ctx{ &out, pen + pos[i].x_offset / 64.0, baseline - pos[i].y_offset / 64.0, {} };
+          FT_Outline_Decompose(&ft->glyph->outline, &funcs, &ctx);
+        }
+        pen += pos[i].x_advance / 64.0;
+      }
+      hb_buffer_destroy(buf);
+    }
+    start = line.end + 1;
+  }
+  (void)start;
+  FT_Set_Transform(ft, nullptr, nullptr);
+  // A contour closes back on its start point: drop the repeated last node, keeping its incoming handle
+  for(auto& s : out) {
+    auto& nd = s.nodes;
+    if(nd.size() > 1 && std::abs(nd.back().p.x - nd[0].p.x) < 1e-6 && std::abs(nd.back().p.y - nd[0].p.y) < 1e-6) {
+      nd[0].in = nd.back().in;
+      nd.pop_back();
+    }
+  }
+  return out;
+}
+#pragma endregion
 
 }

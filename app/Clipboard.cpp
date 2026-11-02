@@ -4,6 +4,9 @@
 #include "core/Resize.h"
 #include "core/Text.h"
 #include "core/io/Png.h"
+#include "core/io/Svg.h"
+#include "core/Layer.h"
+#include "core/Vector.h"
 #include "ui/I18n.h"
 #include "ui/Icons.h"
 #include "ui/Widgets.h"
@@ -17,10 +20,12 @@ namespace david {
 #pragma region [ System clipboard ]
 // The copied image, offered as PNG (keeps alpha: browsers, GIMP, Krita) and BMP (Paint, Office); SDL asks for
 // the bytes only when another program pastes, so they stay here until the next copy
-static std::vector<uint8_t> s_png, s_bmp;
+// Vector objects copied too go as SVG (David to David; other apps get the picture)
+static std::vector<uint8_t> s_png, s_bmp, s_svg;
 
 static const void* clipboardData(void*, const char* mime, size_t* size) {
-  const std::vector<uint8_t>* v = !std::strcmp(mime, "image/png") ? &s_png : !std::strcmp(mime, "image/bmp") ? &s_bmp : nullptr;
+  const std::vector<uint8_t>* v = !std::strcmp(mime, "image/png") ? &s_png : !std::strcmp(mime, "image/bmp") ? &s_bmp
+                                  : !std::strcmp(mime, "image/svg+xml") ? &s_svg : nullptr;
   if(!v || v->empty()) { *size = 0; return nullptr; }
   *size = v->size();
   return v->data();
@@ -41,12 +46,32 @@ static std::vector<uint8_t> encodeBmp(const Lifted& img) {
   return out;
 }
 
-static bool putOnClipboard(const Lifted& img) {
+static bool putOnClipboard(const Lifted& img, const std::string& svgText) {
   int w = img.bounds.width();
   s_png = png::encode(w, img.bounds.height(), [&](int y, uint32_t* row) { std::copy_n(img.px.begin() + size_t(y) * w, w, row); }, 1);
   s_bmp = encodeBmp(img);
-  const char* mimes[] = { "image/png", "image/bmp" };
-  return SDL_SetClipboardData(clipboardData, nullptr, nullptr, mimes, 2);
+  s_svg.assign(svgText.begin(), svgText.end());
+  const char* mimes[] = { "image/png", "image/bmp", "image/svg+xml" };
+  return SDL_SetClipboardData(clipboardData, nullptr, nullptr, mimes, s_svg.empty() ? 2 : 3);
+}
+
+// SVG on the clipboard: David's own objects, or SVG code copied as text (a browser, an editor)
+static std::string clipboardSvg() {
+  size_t size = 0;
+  if(SDL_HasClipboardData("image/svg+xml"))
+    if(void* data = SDL_GetClipboardData("image/svg+xml", &size)) {
+      std::string s(static_cast<char*>(data), size);
+      SDL_free(data);
+      if(!s.empty()) return s;
+    }
+  if(SDL_HasClipboardText())
+    if(char* t = SDL_GetClipboardText()) {
+      std::string s = t;
+      SDL_free(t);
+      size_t start = s.find_first_not_of(" \t\r\n");
+      if(start != std::string::npos && (s.compare(start, 4, "<svg") == 0 || (s.compare(start, 5, "<?xml") == 0 && s.find("<svg") != std::string::npos))) return s;
+    }
+  return "";
 }
 
 // PNG first (keeps alpha), then BMP; bounds start at 0, 0
@@ -116,12 +141,48 @@ void App::copyImage(bool merged, bool cut) {
     img = lift(doc.active(), doc.hasSelection() ? *doc.selection : all);
     if(img.bounds.empty()) return;
   }
-  if(!putOnClipboard(img)) { showError(std::string(tr("Couldn't copy to the clipboard:")) + " " + SDL_GetError()); return; }
+  // The picked objects of a vector layer go along as SVG
+  std::string svgText;
+  if(!merged && vectorMode() && !doc.selectedObjects.empty()) {
+    std::vector<VecObject> picked;
+    for(auto& o : vectorTree(doc.active(), doc.active().frame()).objects)
+      if(std::find(doc.selectedObjects.begin(), doc.selectedObjects.end(), o.id) != doc.selectedObjects.end()) picked.push_back(o);
+    svgText = svg::write(picked, doc.width(), doc.height());
+    if(cut) {
+      VectorChange ch(doc);
+      std::erase_if(ch.tree().objects, [&](const VecObject& o) { return std::find(doc.selectedObjects.begin(), doc.selectedObjects.end(), o.id) != doc.selectedObjects.end(); });
+      ch.tree().touch();
+      if(!putOnClipboard(img, svgText)) return;
+      ch.commit(N_("Cut"), ICON_FA_SCISSORS);
+      doc.selectedObjects.clear();
+      return;
+    }
+  }
+  if(!putOnClipboard(img, svgText)) { showError(std::string(tr("Couldn't copy to the clipboard:")) + " " + SDL_GetError()); return; }
   if(cut && doc.hasSelection()) selectionOp("erase");
 }
 
 void App::pasteImage(EPaste where) {
   commitTool();
+  // SVG into a vector layer becomes objects, picked and ready to move
+  if(where == EPaste::Layer && vectorMode()) {
+    std::string text = clipboardSvg();
+    svg::ReadResult r;
+    std::string err;
+    if(!text.empty() && svg::read(text, r, err) && !r.objects.empty()) {
+      VectorChange ch(*_doc);
+      _doc->selectedObjects.clear();
+      for(auto& o : r.objects) {
+        renumber(o);
+        _doc->selectedObjects.push_back(o.id);
+        ch.tree().objects.push_back(std::move(o));
+      }
+      ch.tree().touch();
+      ch.commit(N_("Paste"), ICON_FA_PASTE);
+      useTool(ETool::Mouse);
+      return;
+    }
+  }
   Lifted img;
   if(!readClipboard(img)) { showError(tr("The clipboard has no image.")); return; }
   _pasted = std::move(img);
@@ -149,6 +210,10 @@ void App::placePaste(bool grow) {
   Document& doc = *_doc;
   int w = _pasted.bounds.width(), h = _pasted.bounds.height();
   if(grow) resizeCanvas(doc, std::max(w, doc.width()), std::max(h, doc.height()), 0, 0, 0, ICON_FA_EXPAND);
+  if(_pasteWhere == EPaste::Layer && doc.active().kind == ELayerKind::Vector) {
+    Lifted keep = _pasted;
+    if(!rasterGuard([this, keep, grow] { _pasted = keep; placePaste(false); })) return;
+  }
   if(_pasteWhere == EPaste::NewLayer)
     addLayer(doc, std::make_unique<Layer>(doc.width(), doc.height(), std::string(tr("Layer")) + " " + std::to_string(doc.layers.size() + 1)),
              doc.activeLayer + 1, N_("Add New Layer"), ICON_FA_SQUARE_PLUS);

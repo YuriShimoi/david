@@ -16,6 +16,7 @@
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "VCPKG_INSTALLED_DIR": "${sourceDir}/build/vcpkg_installed",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
         "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl"
       }
@@ -27,7 +28,8 @@
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-linux",
-        "VCPKG_INSTALLED_DIR": "${sourceDir}/build/vcpkg_installed-linux"
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/build/vcpkg_installed-linux",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports"
       }
     },
     { "name": "win-debug",     "inherits": "win",   "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },

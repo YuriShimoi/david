@@ -1,5 +1,7 @@
 #include "render/CanvasRenderer.h"
 #include "core/Document.h"
+#include "core/Layer.h"
+#include "core/Vector.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -169,6 +171,8 @@ bool CanvasRenderer::init() {
 void CanvasRenderer::shutdown() {
   for(auto& [k, e] : _textures) glDeleteTextures(1, &e.tex);
   _textures.clear();
+  for(auto& [k, e] : _vectorViews) glDeleteTextures(1, &e.tex);
+  _vectorViews.clear();
   glDeleteSamplers(1, &_samplerNearest);
   glDeleteSamplers(1, &_samplerLinear);
   glDeleteBuffers(1, &_vbo);
@@ -198,10 +202,43 @@ void CanvasRenderer::ensureFbos(int w, int h) {
   _fboW = w; _fboH = h;
 }
 
+bool CanvasRenderer::drawVectorView(const Layer& layer, int frame) {
+  const VecTree* tree = vectorTreeOf(layer, frame);
+  if(!tree || !_view) return false;
+  const CanvasView& v = *_view;
+  VectorView& e = _vectorViews[layer.id()];
+  e.seenFrame = _frame;
+  bool stale = !e.tex || e.revision != tree->revision || e.frame != frame || e.w != v.vpW || e.h != v.vpH
+               || e.originX != v.originX || e.originY != v.originY || e.zoom != v.zoom;
+  if(stale) {
+    std::vector<uint32_t> px;
+    renderVector(*tree, { v.zoom, 0, 0, v.zoom, -v.originX * v.zoom, -v.originY * v.zoom }, v.vpW, v.vpH, px);
+    if(!e.tex) glGenTextures(1, &e.tex);
+    glBindTexture(GL_TEXTURE_2D, e.tex);
+    if(e.w != v.vpW || e.h != v.vpH) glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, v.vpW, v.vpH, 0, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+    else glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, v.vpW, v.vpH, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+    e.revision = tree->revision; e.frame = frame; e.w = v.vpW; e.h = v.vpH;
+    e.originX = v.originX; e.originY = v.originY; e.zoom = v.zoom;
+  } else {
+    glBindTexture(GL_TEXTURE_2D, e.tex);
+  }
+  // One texel per screen pixel: no filtering
+  glBindSampler(0, _samplerNearest);
+  glUniform4f(glGetUniformLocation(_tileProgram, "uRect"), float(v.originX), float(v.originY), float(v.vpW / v.zoom), float(v.vpH / v.zoom));
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  glBindSampler(0, v.zoom < 1.0 ? _samplerLinear : _samplerNearest);
+  return true;
+}
+
 void CanvasRenderer::drawLayer(const Layer& lay, int frame, double l, double t, double r, double b, float dx, float dy, float mul, const float* tint) {
   GLint opacityLoc = glGetUniformLocation(_tileProgram, "uOpacity");
   static const float NO_TINT[4] = {};
   glUniform4fv(glGetUniformLocation(_tileProgram, "uTint"), 1, tint ? tint : NO_TINT);
+  // A vector layer's main copy comes straight from its objects, sharp at any zoom
+  if(_view && _view->sharpVectors && lay.kind == ELayerKind::Vector && dx == 0 && dy == 0) {
+    glUniform1f(opacityLoc, lay.opacity / 255.f * mul);
+    if(drawVectorView(lay, frame)) return;
+  }
   // Visible tile range, in the copy's own image coordinates
   int tx0 = std::max(0, int(std::floor((l - dx) / Tile::SIZE))), ty0 = std::max(0, int(std::floor((t - dy) / Tile::SIZE)));
   int tx1 = int(std::floor((r - dx) / Tile::SIZE)), ty1 = int(std::floor((b - dy) / Tile::SIZE));
@@ -237,6 +274,7 @@ void CanvasRenderer::drawLayer(const Layer& lay, int frame, double l, double t, 
 
 void CanvasRenderer::draw(const Document& doc, const CanvasView& v, const CanvasColors& colors) {
   _frame++;
+  _view = &v;
   glViewport(v.vpX, v.fbHeight - v.vpY - v.vpH, v.vpW, v.vpH);
   glEnable(GL_SCISSOR_TEST);
   glScissor(v.vpX, v.fbHeight - v.vpY - v.vpH, v.vpW, v.vpH);
@@ -471,6 +509,11 @@ void CanvasRenderer::draw(const Document& doc, const CanvasView& v, const Canvas
     if(it->second.seenFrame != _frame) { glDeleteTextures(1, &it->second.tex); it = _textures.erase(it); }
     else ++it;
   }
+  for(auto it = _vectorViews.begin(); it != _vectorViews.end();) {
+    if(it->second.seenFrame != _frame) { glDeleteTextures(1, &it->second.tex); it = _vectorViews.erase(it); }
+    else ++it;
+  }
+  _view = nullptr;
 }
 
 }

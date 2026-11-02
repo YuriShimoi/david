@@ -1,4 +1,6 @@
 #include "core/Resize.h"
+#include "core/Vector.h"
+#include "core/Layer.h"
 #include "core/Document.h"
 #include "core/Oklab.h"
 #include "core/Text.h"
@@ -112,9 +114,11 @@ namespace {
   }
 }
 
-// A layer of w × h with the same frames as src (empty and linked cels kept), each frame made by make(frame)
-static std::unique_ptr<Layer> perFrame(const Layer& src, int w, int h, const std::function<void(int, Layer&)>& make) {
+// A layer of w × h with the same frames as src (empty and linked cels kept), each frame made by make(frame).
+// A vector layer's objects go through vec instead, and its pixels are rendered again from them.
+static std::unique_ptr<Layer> perFrame(const Layer& src, int w, int h, const std::function<void(int, Layer&)>& make, const Affine& vec) {
   auto out = std::make_unique<Layer>(w, h, src.name);
+  out->kind = src.kind;
   out->visible = src.visible;
   out->opacity = src.opacity;
   out->blend = src.blend;
@@ -125,6 +129,14 @@ static std::unique_ptr<Layer> perFrame(const Layer& src, int w, int h, const std
     if(g < f) { out->setCel(f, out->cel(g)); continue; }
     if(!src.cel(f)) continue;
     out->setFrame(f);
+    if(const VecTree* t = src.kind == ELayerKind::Vector ? vectorTreeOf(src, f) : nullptr) {
+      VecTree& dst = vectorTree(*out, f);
+      dst = *t;
+      for(auto& o : dst.objects) o.xf = vec * o.xf;
+      dst.touch();
+      rasterizeVectorCel(*out, f);
+      continue;
+    }
     make(f, *out);
   }
   out->setFrame(src.frame());
@@ -195,7 +207,8 @@ static void resampleFrame(const Layer& src, int f, Layer& dst, int w, int h, ERe
 }
 
 std::unique_ptr<Layer> resampleLayer(const Layer& src, int w, int h, EResample mode, bool gamma) {
-  return perFrame(src, w, h, [&](int f, Layer& out) { resampleFrame(src, f, out, w, h, mode, gamma); });
+  return perFrame(src, w, h, [&](int f, Layer& out) { resampleFrame(src, f, out, w, h, mode, gamma); },
+                  Affine::scaling(double(w) / src.width(), double(h) / src.height()));
 }
 
 std::unique_ptr<Layer> reframeLayer(const Layer& src, int w, int h, int dx, int dy, uint32_t fill) {
@@ -206,7 +219,7 @@ std::unique_ptr<Layer> reframeLayer(const Layer& src, int w, int h, int dx, int 
         uint32_t v = src.getAt(f, x - dx, y - dy);
         if(v || fill) out.set(x, y, v);
       }
-  });
+  }, Affine::translate(dx, dy));
 }
 #pragma endregion
 

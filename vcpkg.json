@@ -1,6 +1,6 @@
 {
   "name": "david",
-  "version-string": "1.1.0",
+  "version-string": "1.2.0",
   "builtin-baseline": "9a5dfef5d1a0438a7d24856a85bd60f309d355e9",
   "dependencies": [
     "sdl3",
@@ -45,6 +45,8 @@
     "sol2",
     "cli11",
     "stb",
+    "thorvg",
+    "pugixml",
     {
       "name": "libwebp",
       "default-features": false,

@@ -1,4 +1,5 @@
 #pragma once
+#include "core/Vector.h"
 #include "core/Actions.h"
 #include "core/Animation.h"
 #include "core/TileEdit.h"
@@ -22,7 +23,10 @@ public:
   void set(int layer, int x, int y, uint32_t c);
   // A recorder for the layer (effects write through it)
   TileRecorder& recorder(int layer);
-  int addLayer(const std::string& name);  // above the active layer; returns its index
+  int addLayer(const std::string& name, bool vector = false);  // above the active layer; returns its index
+  // A vector layer's objects on the active frame, to edit in place (null for a raster layer); the change joins
+  // the step and the layer's pixels follow
+  VecTree* vectors(int layer);
   bool deleteLayer(int index);
   void setProps(int index, const LayerProps& props);
   // Frames: switching frames finishes the pixel edits so far (they belong to the frame they were made on)
@@ -38,6 +42,8 @@ private:
   Document& _doc;
   std::unique_ptr<CompoundAction> _step;
   std::map<uint64_t, std::unique_ptr<TileRecorder>> _recs;
+  struct VecBefore { int frame; VecTree tree; };
+  std::map<uint64_t, VecBefore> _vecs;
   bool _done = false;
   // Pixel edits so far become parts, so later layer changes undo in the right order
   void flush();

@@ -1,4 +1,5 @@
 #include "core/io/Formats.h"
+#include "core/io/Svg.h"
 #include "core/io/Anim.h"
 #include "core/Composite.h"
 #include "core/Document.h"
@@ -117,6 +118,7 @@ void registerBuiltinFormats() {
   registerFormat(png);
   registerLayeredFormats();
   registerFlatFormats();
+  registerSvgFormat();
 }
 
 }

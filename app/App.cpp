@@ -20,9 +20,13 @@
 namespace david {
 
 static Uint32 s_fileEvent = 0, s_tickEvent = 0;
-enum EFileDialog { FILE_OPEN = 1, FILE_SAVE = 2, FILE_PALETTE_LOAD = 3, FILE_PALETTE_SAVE = 4, FILE_EFFECT_PARAM = 5, FILE_EXPORT_ANIM = 6, FILE_IMPORT_SHEET = 7 };
+enum EFileDialog { FILE_OPEN = 1, FILE_SAVE = 2, FILE_PALETTE_LOAD = 3, FILE_PALETTE_SAVE = 4, FILE_EFFECT_PARAM = 5, FILE_EXPORT_ANIM = 6, FILE_IMPORT_SHEET = 7,
+                   FILE_IMPORT_SVG = 8, FILE_EXPORT_SVG = 9 };
 // Open lists every format that loads; Save As every one that saves
 static const SDL_DialogFileFilter OPEN_FILTER[] = { { "Images", "png;david;ora;webp;jpg;jpeg;bmp;tga;gif;qoi" }, { "All files", "*" } };
+// With vector support on, SVG opens too
+static const SDL_DialogFileFilter OPEN_FILTER_SVG[] = { { "Images", "png;david;ora;webp;jpg;jpeg;bmp;tga;gif;qoi;svg" }, { "All files", "*" } };
+static const SDL_DialogFileFilter SVG_FILTER[] = { { "SVG", "svg" } };
 static const SDL_DialogFileFilter SAVE_FILTER[] = {
   { "PNG", "png" }, { "David (layers)", "david" }, { "OpenRaster (layers)", "ora" }, { "WebP", "webp" }, { "GIF", "gif" },
   { "JPEG", "jpg;jpeg" }, { "BMP", "bmp" }, { "TGA", "tga" }, { "QOI", "qoi" } };
@@ -135,6 +139,7 @@ bool App::init(int argc, char** argv) {
     if(arg == "--dev") dev = true;
     else if(arg == "--shot" && i + 1 < argc) _shotPath = argv[++i];
     else if(arg == "--selftest" && i + 1 < argc) { _selftestDir = argv[++i]; _shotPath = _selftestDir + "/selftest.png"; }
+    else if(arg == "--selftest-round" && i + 1 < argc) _selftestOnly = std::atoi(argv[++i]);
     else openFile(arg);
   }
   if(dev || !_shotPath.empty()) {
@@ -360,6 +365,18 @@ void App::setupCommands() {
   add({ "layer.up", N_("Move Layer Up"), ICON_FA_ARROW_UP, { ALT | ImGuiKey_PageUp }, [this] { layerOp("up"); }, [this] { return _doc->activeLayer < int(_doc->layers.size()) - 1; } });
   add({ "layer.down", N_("Move Layer Down"), ICON_FA_ARROW_DOWN, { ALT | ImGuiKey_PageDown }, [this] { layerOp("down"); }, [this] { return _doc->activeLayer > 0; } });
   add({ "layer.props", N_("Layer Properties"), ICON_FA_SLIDERS, { ImGuiKey_F4 }, [this] { layerOp("props"); } });
+  // Vector layers (Settings > Beta tools > Vector support)
+  auto beta = [this] { return _cfg.betaVector; };
+  add({ "layer.addVector", N_("Add New Vector Layer"), ICON_FA_BEZIER_CURVE, { CTRL | ALT | ImGuiKey_N }, [this] { layerOp("addVector"); }, beta });
+  add({ "layer.rasterize", N_("Rasterize Layer"), ICON_FA_IMAGE, {}, [this] { rasterizeLayer(_doc->activeLayer); }, [this] { return _doc->active().kind == ELayerKind::Vector; } });
+  view({ "view.vectorPixels", N_("Pixel Preview"), ICON_FA_CHESS_BOARD, {}, [this] { _cfg.vectorPixels = !_cfg.vectorPixels; }, beta });
+  add({ "file.importSvg", N_("Import SVG..."), ICON_FA_FILE_IMPORT, {}, [this] {
+    SDL_ShowOpenFileDialog(onFileDialog, reinterpret_cast<void*>(intptr_t(FILE_IMPORT_SVG)), _window, SVG_FILTER, 1, nullptr, false);
+  }, beta });
+  add({ "file.exportSvg", N_("Export SVG..."), ICON_FA_FILE_EXPORT, {}, [this] {
+    SDL_ShowSaveFileDialog(onFileDialog, reinterpret_cast<void*>(intptr_t(FILE_EXPORT_SVG)), _window, SVG_FILTER, 1, nullptr);
+  }, beta });
+  add({ "image.trace", N_("Trace Pixels"), ICON_FA_WAND_MAGIC_SPARKLES, {}, [this] { traceLayer(); }, beta });
 
   // Single-key tool and color shortcuts (Paint.NET); a key shared by several tools cycles through them
   std::vector<ImGuiKey> toolKeys;
@@ -470,6 +487,8 @@ void App::handleEvent(const SDL_Event& e) {
         char* path = static_cast<char*>(e.user.data1);
         if(e.user.code == FILE_OPEN && path) openFile(path);
         if(e.user.code == FILE_EXPORT_ANIM && path) exportAnimation(path);
+        if(e.user.code == FILE_IMPORT_SVG && path) importSvg(path, false);
+        if(e.user.code == FILE_EXPORT_SVG && path) exportSvg(path);
         if(e.user.code == FILE_IMPORT_SHEET && path) sheetChosen(path);
         if(e.user.code == FILE_EFFECT_PARAM && path && _fx) { _fxValues.text[_fxFileParam] = path; previewEffect(); }
         if((e.user.code == FILE_PALETTE_LOAD || e.user.code == FILE_PALETTE_SAVE) && path) paletteFileChosen(path, e.user.code == FILE_PALETTE_SAVE);
@@ -634,13 +653,14 @@ void App::frame() {
   _nav.view.customGrid = t.grid;
   _nav.view.gridW = t.gridW; _nav.view.gridH = t.gridH; _nav.view.gridX = t.gridX; _nav.view.gridY = t.gridY;
   setOnionView();
+  vectorFrame();
   _renderer.draw(*_doc, _nav.view, colors);
 
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
   if(!_shotPath.empty()) {
     _shotFrames++;
     if(!_selftestDir.empty()) selftestStep(_shotFrames);
-    if(_shotFrames >= (_selftestDir.empty() ? 20 : 320) && !_reloadAt && !_round2 && !_round3 && !_round4 && !_round5 && !_round6 && !_round7 && !_round8) {
+    if(_shotFrames >= (_selftestDir.empty() ? 20 : 320) && !_reloadAt && !_round2 && !_round3 && !_round4 && !_round5 && !_round6 && !_round7 && !_round8 && !_round9) {
       if(!_selftestDir.empty()) {
         std::ofstream out(pathFromUtf8(_selftestDir + "/selftest.txt"));
         out << _selftestLog;
@@ -744,6 +764,15 @@ void App::drawMenu() {
       _commands.menuItem("anim.framesToLayers");
       ImGui::EndMenu();
     }
+    if(_cfg.betaVector && ImGui::BeginMenu((std::string(ICON_FA_BEZIER_CURVE "  ") + tr("Vector")).c_str())) {
+      for(auto id : { "layer.addVector", "layer.rasterize", "image.trace" }) _commands.menuItem(id);
+      ImGui::Separator();
+      _commands.menuItem("file.importSvg");
+      _commands.menuItem("file.exportSvg");
+      ImGui::Separator();
+      _commands.menuItem("view.vectorPixels", _cfg.vectorPixels);
+      ImGui::EndMenu();
+    }
     _commands.menuItem("view.probe", _cfg.showProbe);
     _commands.menuItem("image.autotile");
     ImGui::EndMenu();
@@ -845,6 +874,7 @@ void App::drawDialogs() {
   drawUnsavedDialog();
   drawResetDialog();
   drawPasteDialog();
+  drawRasterDialog();
   drawEffectDialog();
   drawCommandDialog();
   drawGridDialog();
@@ -1113,7 +1143,8 @@ void App::showEffectFileDialog(const std::string& param) {
 }
 
 void App::showOpenDialog() {
-  SDL_ShowOpenFileDialog(onFileDialog, reinterpret_cast<void*>(intptr_t(FILE_OPEN)), _window, OPEN_FILTER, int(std::size(OPEN_FILTER)), nullptr, false);
+  if(_cfg.betaVector) SDL_ShowOpenFileDialog(onFileDialog, reinterpret_cast<void*>(intptr_t(FILE_OPEN)), _window, OPEN_FILTER_SVG, int(std::size(OPEN_FILTER_SVG)), nullptr, false);
+  else SDL_ShowOpenFileDialog(onFileDialog, reinterpret_cast<void*>(intptr_t(FILE_OPEN)), _window, OPEN_FILTER, int(std::size(OPEN_FILTER)), nullptr, false);
 }
 
 // Asks before the image's changes would be lost; the answer runs the action (or saves first)

@@ -47,6 +47,7 @@ public:
   ImFont* previewFont(const std::string& path, int index) override;
   void switchBack() override { selectTool(_previousTool); }
   void useTool(ETool id) override;
+  bool vectorMode() override;
   #pragma endregion
 
 private:
@@ -60,6 +61,7 @@ private:
   std::string _shotPath;   // --shot <png>: save the window after a few frames and quit (dev checks)
   int _shotFrames = 0;
   std::string _selftestDir; // --selftest <dir>: scripted input through the real event path, report in <dir>
+  int _selftestOnly = 0;    // --selftest-round N: only that round (8 or later), for checking new work
   std::string _selftestLog;
 
   std::unique_ptr<Document> _doc;
@@ -132,7 +134,7 @@ private:
   std::string _notice;
   int _settingsSeen = 0;
   uint64_t _reloadAt = 0;
-  int _round2 = 0, _round3 = 0, _round4 = 0, _round5 = 0, _round6 = 0, _round7 = 0, _round8 = 0;
+  int _round2 = 0, _round3 = 0, _round4 = 0, _round5 = 0, _round6 = 0, _round7 = 0, _round8 = 0, _round9 = 0;
   int _probeGray = 0;  // a screen value one self-test step compares with the next
   bool _selftestMods = false;  // the self-test turns the example mods on
   #pragma endregion
@@ -305,6 +307,19 @@ private:
   void pasteImage(EPaste where);
   void placePaste(bool grow);
   void drawPasteDialog();
+  // Vector layers (app/VectorUi.cpp)
+  std::function<void()> _afterRaster;  // what a raster edit on a vector layer was about to do
+  bool _rasterRemember = false;
+  uint64_t _objectsLayer = 0;          // the layer selectedObjects belong to
+  // True when the active layer takes raster edits; on a vector layer asks first (rasterize, or a new layer)
+  // and runs then once it can
+  bool rasterGuard(std::function<void()> then);
+  void rasterizeLayer(int index);
+  void drawRasterDialog();
+  void vectorFrame();
+  void importSvg(const std::string& path, bool newDocument);
+  void exportSvg(const std::string& path);
+  void traceLayer();
   // Mod windows: open ones by "<mod>/<id>" are in _cfg.modWindows; a window whose draw failed shows its error
   std::map<std::string, std::string> _modWindowError;
   bool modWindowOpen(const std::string& key) const;

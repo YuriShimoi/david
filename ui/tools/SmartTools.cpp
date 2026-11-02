@@ -4,6 +4,7 @@
 #include "core/Gradient.h"
 #include "core/Paint.h"
 #include "core/Stroke.h"
+#include "ui/tools/VectorTools.h"
 #include "ui/CanvasNav.h"
 #include "core/Text.h"
 #include "ui/I18n.h"
@@ -350,6 +351,7 @@ public:
   void commit(ToolHost& h) override {
     if(_nodes.empty()) return;
     _edit.commit(h.doc(), name, icon);
+    if(_live.active()) _live.commit(h, name, icon);
     _nodes.clear();
     _dragNode = -1;
     _closed = false;
@@ -357,6 +359,7 @@ public:
 
   void cancel(ToolHost& h) override {
     _edit.cancel();
+    _live.cancel(h);
     _nodes.clear();
     _dragNode = -1;
     _closed = false;
@@ -440,6 +443,7 @@ private:
   struct Node { Point p, in, out; };
   const bool _curve;
   LiveEdit _edit;
+  LiveObject _live;
   std::vector<Node> _nodes;
   Point _origin{}, _mid{};
   bool _midSet = false;  // the middle point follows the ends until it is dragged
@@ -520,7 +524,48 @@ private:
     return out;
   }
 
+  // On a vector layer: the line or curve as a path object with round ends, dashes and arrow heads
+  void renderObject(ToolHost& h) {
+    auto& s = h.settings();
+    VecObject o;
+    o.kind = EVecKind::Path;
+    o.name = _curve ? "Curve" : "Line";
+    Subpath sp;
+    if(!_curve && _nodes.size() == 2) {
+      const Point &a = _nodes[0].p, &b = _nodes[1].p;
+      Point m = mid();
+      if(s.lineSharp) sp.nodes = { PathNode::corner(a), PathNode::corner(m), PathNode::corner(b) };
+      else {
+        Point c{ 2 * m.x - (a.x + b.x) / 2, 2 * m.y - (a.y + b.y) / 2 };
+        sp.nodes = { { a, a, { a.x + (c.x - a.x) * 2 / 3, a.y + (c.y - a.y) * 2 / 3 }, ENodeType::Corner },
+                     { b, { b.x + (c.x - b.x) * 2 / 3, b.y + (c.y - b.y) * 2 / 3 }, b, ENodeType::Corner } };
+      }
+    } else {
+      for(auto& n : _nodes) {
+        bool smooth = n.in.x || n.in.y || n.out.x || n.out.y;
+        sp.nodes.push_back({ n.p, { n.p.x + n.in.x, n.p.y + n.in.y }, { n.p.x + n.out.x, n.p.y + n.out.y }, smooth ? ENodeType::Symmetric : ENodeType::Corner });
+      }
+      sp.closed = _closed;
+    }
+    o.paths = { sp };
+    double w = std::max(1, s.brushSize);
+    Polyline pts = path(h);
+    for(bool start : { true, false })
+      if((start ? s.arrowStart : s.arrowEnd) && !_closed && pts.size() >= 2) {
+        Subpath wing;
+        for(auto& q : arrowHead(pts, w, start)) wing.nodes.push_back(PathNode::corner(q));
+        o.paths.push_back(wing);
+      }
+    o.stroke = toolStroke(_color, w, EStrokeAlign::Center);
+    o.stroke.cap = ECap::Round;
+    o.stroke.join = EJoin::Round;
+    if(s.dash == 1) o.stroke.dash = { 4, 2 };
+    else if(s.dash == 2) o.stroke.dash = { 0.01, 2 };
+    _live.set(h, std::move(o));
+  }
+
   void render(ToolHost& h) {
+    if(h.vectorMode()) { if(_nodes.size() >= 2 || _live.active()) renderObject(h); return; }
     Document& doc = h.doc();
     auto& s = h.settings();
     TileRecorder& rec = _edit.redraw(doc);
@@ -556,7 +601,7 @@ public:
 
   void down(ToolHost& h, const ToolInput& in) override {
     Point p{ in.x, in.y };
-    if(_edit.active()) {
+    if(editing()) {
       // The box is kept top-left to bottom-right, so corner and edge numbers stay put while dragging
       normalize();
       if(int n = nubAt(h, in); n >= 0) {
@@ -624,21 +669,21 @@ public:
     if(fresh && (std::abs(_b.x - _a.x) * z < 2 || std::abs(_b.y - _a.y) * z < 2)) cancel(h);
   }
 
-  bool busy() const override { return _edit.active() || _mode >= 0; }
+  bool busy() const override { return editing() || _mode >= 0; }
 
   ECursor cursor(ToolHost& h, const ToolInput& at) override {
     if(_drawing) return ECursor::Cross;
     if(_mode >= 0 && _mode != 5) return ECursor::Move;
-    if(!_edit.active()) return ECursor::Cross;
+    if(!editing()) return ECursor::Cross;
     if(nubAt(h, at) >= 0) return ECursor::Move;
     bool inside = at.x >= std::min(_a.x, _b.x) && at.x <= std::max(_a.x, _b.x) && at.y >= std::min(_a.y, _b.y) && at.y <= std::max(_a.y, _b.y);
     return inside ? ECursor::Move : ECursor::Cross;
   }
-  void commit(ToolHost& h) override { _edit.commit(h.doc(), name, icon); _mode = -1; }
-  void cancel(ToolHost& h) override { _edit.cancel(); _mode = -1; _drawing = false; _free.clear(); h.doc().onChanged(); }
+  void commit(ToolHost& h) override { _edit.commit(h.doc(), name, icon); if(_live.active()) _live.commit(h, name, icon); _mode = -1; }
+  void cancel(ToolHost& h) override { _edit.cancel(); _live.cancel(h); _mode = -1; _drawing = false; _free.clear(); h.doc().onChanged(); }
 
   bool onKey(ToolHost& h, ImGuiKey k) override {
-    if(!_edit.active()) return false;
+    if(!editing()) return false;
     if(k == ImGuiKey_Escape) cancel(h);
     else if(k == ImGuiKey_Enter || k == ImGuiKey_KeypadEnter) commit(h);
     else return false;
@@ -651,11 +696,11 @@ public:
     if(io.KeyCtrl || io.KeyAlt || !ImGui::IsKeyPressed(ImGuiKey_A, false)) return;
     int n = int(EShapeKind::COUNT);
     h.settings().shapeKind = (h.settings().shapeKind + (io.KeyShift ? n - 1 : 1)) % n;
-    if(_edit.active()) render(h);
+    if(editing()) render(h);
   }
 
   void overlay(ToolHost& h, ImDrawList* dl, const ToolInput& at) override {
-    if(!_edit.active()) return;
+    if(!editing()) return;
     float dpi = h.dpi();
     if(_drawing) {
       float phase = float(ImGui::GetTime() * 8);
@@ -710,11 +755,12 @@ public:
     std::pair<bool, bool> g{ s.antialias, s.pixelPerfect };
     changed |= g != _globals;
     _globals = g;
-    if(changed && _edit.active()) render(h);
+    if(changed && editing()) render(h);
   }
 
 private:
   LiveEdit _edit;
+  LiveObject _live;  // the same shape as an object, on vector layers
   Point _a{}, _b{}, _grab{};
   uint32_t _primary = 0, _secondary = 0;
   int _mode = -1;  // 0-3 corner, 4 move, 5 new, 6-9 edge
@@ -725,6 +771,35 @@ private:
   Point _fixed{};
 
   static EShapeKind kind(ToolHost& h) { return EShapeKind(std::clamp(h.settings().shapeKind, 0, int(EShapeKind::COUNT) - 1)); }
+  bool editing() const { return _edit.active() || _live.active(); }
+
+  // On a vector layer: the shape as an object (the outline inside it, like the pixels)
+  void renderObject(ToolHost& h) {
+    auto& s = h.settings();
+    EShapeKind k = kind(h);
+    VecObject o;
+    o.x = _a.x; o.y = _a.y; o.w = _b.x - _a.x; o.h = _b.y - _a.y;
+    switch(k) {
+      case EShapeKind::Rect: o.kind = EVecKind::Rect; break;
+      case EShapeKind::RoundRect: o.kind = EVecKind::Rect; o.radius = s.cornerRadius; break;
+      case EShapeKind::Ellipse: o.kind = EVecKind::Ellipse; break;
+      case EShapeKind::Polygon: o.kind = EVecKind::Polygon; o.sides = s.polySides; break;
+      default: {
+        o.kind = EVecKind::Path;
+        Subpath sp;
+        sp.closed = true;
+        for(auto& q : freeContour()) sp.nodes.push_back(PathNode::corner(q));
+        o.paths = { sp };
+        break;
+      }
+    }
+    o.name = k == EShapeKind::Free ? "Free polygon" : k == EShapeKind::Ellipse ? "Ellipse" : k == EShapeKind::Polygon ? "Polygon" : "Rectangle";
+    double w = std::max(1, s.brushSize);
+    if(s.shapeDraw == 0) o.stroke = toolStroke(_primary, w, EStrokeAlign::Inside);
+    else if(s.shapeDraw == 1) o.fill = VecPaint::solid(_primary);
+    else { o.fill = VecPaint::solid(_secondary); o.stroke = toolStroke(_primary, w, EStrokeAlign::Inside); }
+    _live.set(h, std::move(o));
+  }
 
   // Fits the box to the drawn points and makes them relative to it; false when too small to keep
   bool fitFree(double zoom) {
@@ -788,6 +863,7 @@ private:
   }
 
   void render(ToolHost& h) {
+    if(h.vectorMode()) { renderObject(h); return; }
     Document& doc = h.doc();
     auto& s = h.settings();
     TileRecorder& rec = _edit.redraw(doc);

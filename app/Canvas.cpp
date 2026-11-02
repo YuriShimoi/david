@@ -1,4 +1,6 @@
 #include "app/App.h"
+#include "core/Vector.h"
+#include "core/Layer.h"
 #include "core/Stroke.h"
 #include "core/Text.h"
 #include "ui/I18n.h"
@@ -60,6 +62,13 @@ void App::pointer(int phase, float wx, float wy, int button, bool pen, int click
   bool snaps = (id == ETool::RectSelect && _cfg.tools.selectShape < 2) || id == ETool::Line || id == ETool::Curve || id == ETool::Shapes || id == ETool::Gradient;
   if(snaps && !in.doubleClick) snapToGrid(_cfg.tools, in.x, in.y);
   if(phase == 0) {
+    // Tools that paint pixels ask before touching a vector layer; vector-aware ones make objects there
+    static const ETool safe[] = { ETool::Mouse, ETool::Zoom, ETool::Pan, ETool::Picker, ETool::RectSelect, ETool::Lasso, ETool::EllipseSelect,
+                                  ETool::PolyLasso, ETool::MagicWand, ETool::MoveSelection, ETool::Node };
+    static const ETool drawing[] = { ETool::Shapes, ETool::Line, ETool::Curve, ETool::Text };
+    bool harmless = std::find(std::begin(safe), std::end(safe), id) != std::end(safe);
+    bool vectorTool = vectorMode() && std::find(std::begin(drawing), std::end(drawing), id) != std::end(drawing);
+    if(_doc->active().kind == ELayerKind::Vector && !harmless && !vectorTool && !rasterGuard(nullptr)) { _hover = in; return; }
     _gesture = EGesture::Tool;
     _gestureButton = button;
     SDL_CaptureMouse(true);
@@ -179,6 +188,7 @@ std::vector<int> App::stripOrder(bool shownOnly) const {
 }
 
 bool App::toolHidden(const Tool& t) const {
+  if(t.id == ETool::Node && !_cfg.betaVector) return true;
   return std::find(_cfg.hiddenTools.begin(), _cfg.hiddenTools.end(), t.name) != _cfg.hiddenTools.end();
 }
 
@@ -189,6 +199,8 @@ void App::selectTool(int index) {
   _tool = index;
 }
 
+bool App::vectorMode() { return _cfg.betaVector && _doc->active().kind == ELayerKind::Vector; }
+
 void App::useTool(ETool id) {
   for(int i = 0; i < int(_tools.size()); i++) if(_tools[i]->id == id) { selectTool(i); return; }
 }
@@ -196,7 +208,7 @@ void App::useTool(ETool id) {
 // Paint.NET: pressing the key of the current tool moves to the next tool sharing that key
 void App::toolKey(ImGuiKey key) {
   std::vector<int> group;
-  for(int i = 0; i < int(_tools.size()); i++) if(_tools[i]->key == key) group.push_back(i);
+  for(int i = 0; i < int(_tools.size()); i++) if(_tools[i]->key == key && !(_tools[i]->id == ETool::Node && !_cfg.betaVector)) group.push_back(i);
   if(group.empty()) return;
   auto it = std::find(group.begin(), group.end(), _tool);
   if(it != group.end() && tool().cycle(*this)) return;
@@ -260,6 +272,7 @@ void App::selectionOp(const char* what) {
     m->invert();
     pushSelection(doc, std::move(m), N_("Invert Selection"), ICON_FA_CIRCLE_HALF_STROKE);
   } else if(doc.hasSelection()) {
+    if(!rasterGuard([this, w = std::string(what)] { selectionOp(w.c_str()); })) return;
     bool erase = !std::strcmp(what, "erase");
     Stroke st(doc, doc.active(), erase ? EInk::Erase : EInk::Paint, _primary);
     IRect b = doc.selection->bounds();
@@ -276,7 +289,12 @@ void App::selectionOp(const char* what) {
 void App::layerOp(const char* what) {
   Document& doc = *_doc;
   int a = doc.activeLayer;
-  if(!std::strcmp(what, "add")) {
+  if(!std::strcmp(what, "addVector")) {
+    auto l = std::make_unique<Layer>(doc.width(), doc.height(), std::string(tr("Vector")) + " " + std::to_string(doc.layers.size() + 1));
+    l->kind = ELayerKind::Vector;
+    vectorTree(*l, 0).touch();
+    addLayer(doc, std::move(l), a + 1, N_("Add New Vector Layer"), ICON_FA_BEZIER_CURVE);
+  } else if(!std::strcmp(what, "add")) {
     // Paint.NET names new layers by count
     addLayer(doc, std::make_unique<Layer>(doc.width(), doc.height(), std::string(tr("Layer")) + " " + std::to_string(doc.layers.size() + 1)), a + 1, N_("Add New Layer"), ICON_FA_SQUARE_PLUS);
   } else if(!std::strcmp(what, "delete")) {
@@ -286,6 +304,8 @@ void App::layerOp(const char* what) {
     copy->name += std::string(" ") + tr("copy");
     addLayer(doc, std::move(copy), a + 1, N_("Duplicate Layer"), ICON_FA_CLONE);
   } else if(!std::strcmp(what, "merge")) {
+    // Merging into a vector layer turns it into pixels first
+    if(a > 0 && doc.layers[a - 1]->kind == ELayerKind::Vector) rasterizeLayer(a - 1);
     mergeDown(doc, a, ICON_FA_ANGLES_DOWN);
   } else if(!std::strcmp(what, "up")) {
     moveLayer(doc, a, a + 1, ICON_FA_ARROW_UP);

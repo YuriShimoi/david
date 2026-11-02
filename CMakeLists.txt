@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(david VERSION 1.1.0 LANGUAGES C CXX)
+project(david VERSION 1.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +20,10 @@ find_package(glm CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Freetype REQUIRED)
 find_package(harfbuzz CONFIG REQUIRED)
+find_package(pugixml CONFIG REQUIRED)
+# ThorVG (vector layers) ships no CMake config, only pkg-config: its static library and headers by path
+find_path(THORVG_INCLUDE thorvg.h PATH_SUFFIXES thorvg-1 REQUIRED)
+find_library(THORVG_LIB NAMES thorvg-1 thorvg REQUIRED)
 if(NOT WIN32)
   find_package(Fontconfig REQUIRED)
 endif()
@@ -37,7 +41,8 @@ file(GLOB_RECURSE CORE_SRC CONFIGURE_DEPENDS core/*.cpp)
 add_library(david_core STATIC ${CORE_SRC})
 target_include_directories(david_core PUBLIC ${CMAKE_SOURCE_DIR})
 target_include_directories(david_core PRIVATE ${Stb_INCLUDE_DIR})
-target_link_libraries(david_core PUBLIC PNG::PNG ZLIB::ZLIB WebP::webp WebP::webpdecoder WebP::webpdemux WebP::libwebpmux glm::glm nlohmann_json::nlohmann_json Freetype::Freetype harfbuzz::harfbuzz)
+target_link_libraries(david_core PUBLIC PNG::PNG ZLIB::ZLIB WebP::webp WebP::webpdecoder WebP::webpdemux WebP::libwebpmux glm::glm nlohmann_json::nlohmann_json Freetype::Freetype harfbuzz::harfbuzz pugixml::pugixml ${THORVG_LIB})
+target_include_directories(david_core PUBLIC ${THORVG_INCLUDE})
 #endregion
 
 #region [ render ]

@@ -4,6 +4,9 @@
 #include "core/Document.h"
 #include "core/io/Png.h"
 #include "core/io/Zip.h"
+#include "core/io/Svg.h"
+#include "core/Vector.h"
+#include "core/Layer.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cstdio>
@@ -75,6 +78,20 @@ std::vector<uint8_t> davidSave(const Document& d, std::string& error) {
     json lj = { { "name", l.name }, { "visible", l.visible }, { "opacity", l.opacity }, { "blend", blendId(l.blend) }, { "file", file } };
     entries.push_back({ file, png::encodeLayer(l, 0) });
     if(entries.back().data.empty()) { error = "can't encode layer " + l.name; return {}; }
+    // Vector layers (1.2): the objects as SVG next to their rendered PNG, which older readers load instead
+    auto svgOf = [&](int f) -> std::string {
+      if(l.kind != ELayerKind::Vector) return "";
+      const VecTree* t = vectorTreeOf(l, f);
+      if(!t) return "";
+      std::string sf = "layers/" + std::to_string(i) + (f ? "/" + std::to_string(f) : std::string()) + ".svg";
+      std::string text = svg::write(t->objects, d.width(), d.height());
+      entries.push_back({ sf, std::vector<uint8_t>(text.begin(), text.end()) });
+      return sf;
+    };
+    if(l.kind == ELayerKind::Vector) {
+      lj["kind"] = "vector";
+      if(!anim) if(std::string sf = svgOf(0); !sf.empty()) lj["svg"] = sf;
+    }
     if(anim) {
       json cels = json::array();
       for(int f = 0; f < d.frameCount(); f++) {
@@ -84,7 +101,9 @@ std::vector<uint8_t> davidSave(const Document& d, std::string& error) {
         if(l.celEmpty(f)) { cels.push_back(nullptr); continue; }
         std::string cf = f == 0 ? file : "layers/" + std::to_string(i) + "/" + std::to_string(f) + ".png";
         if(f > 0) entries.push_back({ cf, png::encodeLayer(l, f) });
-        cels.push_back({ { "file", cf } });
+        json cj = { { "file", cf } };
+        if(std::string sf = svgOf(f); !sf.empty()) cj["svg"] = sf;
+        cels.push_back(cj);
       }
       lj["cels"] = cels;
     }
@@ -126,6 +145,18 @@ std::unique_ptr<Document> davidLoad(const std::vector<uint8_t>& bytes, std::stri
     }
   }
   int n = doc->frameCount();
+  // A vector cel's objects; its pixels stay the saved PNG (fonts or renderers may differ on this machine)
+  auto readSvg = [&](const std::string& file, Layer& layer, int frame) {
+    if(file.empty()) return true;
+    const zip::Entry* e = zip::find(entries, file);
+    if(!e) { error = "missing " + file; return false; }
+    svg::ReadResult r;
+    if(!svg::read(std::string(e->data.begin(), e->data.end()), r, error)) return false;
+    VecTree& t = vectorTree(layer, frame);
+    t.objects = std::move(r.objects);
+    t.touch();
+    return true;
+  };
   for(auto& l : j.value("layers", nlohmann::json::array())) {
     std::unique_ptr<Layer> layer;
     auto cels = l.value("cels", nlohmann::json::array());
@@ -144,6 +175,7 @@ std::unique_ptr<Document> davidLoad(const std::vector<uint8_t>& bytes, std::stri
         if(!e) { error = "missing " + c.value("file", std::string("cel")); return nullptr; }
         layer->setFrame(f);
         if(!pasteFromPng(e->data, *layer, 0, 0, error)) return nullptr;
+        if(!readSvg(c.value("svg", ""), *layer, f)) return nullptr;
       }
       layer->setFrame(0);
     } else {
@@ -151,9 +183,11 @@ std::unique_ptr<Document> davidLoad(const std::vector<uint8_t>& bytes, std::stri
       if(!e) { error = "missing " + l.value("file", std::string("layer")); return nullptr; }
       layer = layerFromPng(e->data, w, h, 0, 0, error);
       if(!layer) return nullptr;
+      if(!readSvg(l.value("svg", ""), *layer, 0)) return nullptr;
       layer->fitFrames(n, 0);
     }
     layer->name = l.value("name", "Layer");
+    if(l.value("kind", "") == "vector") layer->kind = ELayerKind::Vector;
     layer->visible = l.value("visible", true);
     layer->opacity = uint8_t(std::clamp(l.value("opacity", 255), 0, 255));
     layer->blend = blendFromId(l.value("blend", "normal").c_str());

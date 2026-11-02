@@ -42,6 +42,7 @@ struct CanvasView {
   bool customGrid = false;                 // the user's grid (cell size and offset in image pixels)
   int gridW = 16, gridH = 16, gridX = 0, gridY = 0;
   OnionView onion;
+  bool sharpVectors = false;               // vector layers drawn from their objects at screen resolution
 };
 
 class CanvasRenderer {
@@ -75,6 +76,17 @@ private:
   GLuint _fbo[3] = {}, _fboTex[3] = {};
   int _fboW = 0, _fboH = 0;
   void ensureFbos(int w, int h);
+  // Vector layers at screen resolution: one viewport-sized render per layer, redone when the view or the
+  // objects change
+  struct VectorView {
+    GLuint tex = 0;
+    uint64_t revision = 0, seenFrame = 0;
+    int frame = -1, w = 0, h = 0;
+    double originX = 0, originY = 0, zoom = 0;
+  };
+  std::unordered_map<uint64_t, VectorView> _vectorViews;
+  const CanvasView* _view = nullptr;
+  bool drawVectorView(const Layer& layer, int frame);
   GLuint _vao = 0, _vbo = 0;
   GLuint _samplerNearest = 0, _samplerLinear = 0;
   uint64_t _frame = 0;

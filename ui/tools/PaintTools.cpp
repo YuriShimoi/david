@@ -425,15 +425,6 @@ private:
 };
 #pragma endregion
 
-#pragma region [ Mouse ]
-// Does nothing on click: just the pointer, with the wheel zoom and middle-button / Space pan every tool has
-class MouseTool : public Tool {
-public:
-  MouseTool() : Tool(ETool::Mouse, ICON_TB_POINTER, N_("Mouse"), ImGuiKey_V) {}
-  ECursor cursor(ToolHost&, const ToolInput&) override { return ECursor::Arrow; }
-};
-#pragma endregion
-
 #pragma region [ Zoom and pan ]
 class ZoomTool : public Tool {
 public:
@@ -500,7 +491,6 @@ private:
 };
 #pragma endregion
 
-std::unique_ptr<Tool> makeMouse() { return std::make_unique<MouseTool>(); }
 std::unique_ptr<Tool> makeBrush() { return std::make_unique<BrushTool>(ETool::Brush, ICON_TB_BRUSH, N_("Paintbrush"), ImGuiKey_B, EInk::Paint); }
 std::unique_ptr<Tool> makeEraser() { return std::make_unique<BrushTool>(ETool::Eraser, ICON_TB_ERASER, N_("Eraser"), ImGuiKey_E, EInk::Erase); }
 std::unique_ptr<Tool> makePencil() { return std::make_unique<PencilTool>(); }

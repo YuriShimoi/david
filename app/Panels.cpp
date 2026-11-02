@@ -310,7 +310,14 @@ void App::drawLayersWindow() {
       dl->AddImage(ImTextureRef(ImTextureID(t.tex)), tp, { tp.x + tw, tp.y + th });
       float ty = ImTrunc((ra.y + rb.y - ImGui::GetTextLineHeight()) / 2);
       dl->PushClipRect(ra, rb, true);
-      dl->AddText({ p.x + thumb + ImGui::GetStyle().ItemSpacing.x, ty }, ImGui::GetColorU32(l.visible ? _theme.text : _theme.textMuted), l.name.c_str());
+      float nameX = p.x + thumb + ImGui::GetStyle().ItemSpacing.x;
+      // Vector layers wear a small curve icon before the name (a lock when vector support is off)
+      if(l.kind == ELayerKind::Vector) {
+        const char* badge = _cfg.betaVector ? ICON_FA_BEZIER_CURVE : ICON_FA_LOCK;
+        dl->AddText({ nameX, ty }, ImGui::GetColorU32(_theme.textMuted), badge);
+        nameX += ImGui::CalcTextSize(badge).x + 4 * _dpi;
+      }
+      dl->AddText({ nameX, ty }, ImGui::GetColorU32(l.visible ? _theme.text : _theme.textMuted), l.name.c_str());
       dl->PopClipRect();
       ImGui::SetCursorScreenPos(after);
       ImGui::PopID();
@@ -328,7 +335,8 @@ void App::drawLayersWindow() {
     }
     if(props >= 0) { _doc->activeLayer = props; _commands.run("layer.props"); }
 
-    for(auto id : { "layer.add", "layer.delete", "layer.duplicate", "layer.merge", "layer.up", "layer.down", "layer.props" }) {
+    for(auto id : { "layer.add", "layer.addVector", "layer.delete", "layer.duplicate", "layer.merge", "layer.up", "layer.down", "layer.props" }) {
+      if(!_cfg.betaVector && !std::strcmp(id, "layer.addVector")) continue;
       commandButton(id);
       ImGui::SameLine(0, 2 * _dpi);
     }

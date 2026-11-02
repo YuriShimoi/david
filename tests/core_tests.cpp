@@ -22,6 +22,8 @@
 #include "core/Stroke.h"
 #include "core/TileEdit.h"
 #include "core/io/Png.h"
+#include "core/io/Svg.h"
+#include "core/Vector.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -882,6 +884,72 @@ static void testFormats(const std::filesystem::path& dir) {
   CHECK(formatFor("x.JPEG") && formatFor("x.JPEG")->ext == "jpg" && !formatFor("x.unknown"));
 }
 
+static void testVector() {
+  // A red rect and a stroked ellipse on a vector layer, rendered into its tiles
+  auto doc = Document::blank(100, 80, 0);
+  Layer& l = doc->active();
+  l.kind = ELayerKind::Vector;
+  VecTree& t = vectorTree(l, 0);
+  VecObject r;
+  r.id = newObjectId(); r.kind = EVecKind::Rect; r.x = 10; r.y = 10; r.w = 30; r.h = 20;
+  r.fill = VecPaint::solid(Color{ 255, 0, 0, 255 }.pack());
+  t.objects.push_back(r);
+  VecObject e;
+  e.id = newObjectId(); e.kind = EVecKind::Ellipse; e.x = 50; e.y = 20; e.w = 40; e.h = 40;
+  e.stroke.paint = VecPaint::solid(BLACK); e.stroke.width = 4;
+  e.xf = Affine::translate(2, 0);
+  t.objects.push_back(e);
+  t.touch();
+  rasterizeVectorCel(l, 0);
+  CHECK(l.get(25, 20) == Color{ 255, 0, 0, 255 }.pack() && l.get(5, 5) == 0);
+  CHECK((l.get(52, 40) >> 24) > 200 && l.get(72, 40) == 0);
+  // Bounds, hit test, transforms
+  DRect b = bounds(t.objects, false);
+  CHECK(std::abs(b.x0 - 10) < 0.01 && std::abs(b.x1 - 92) < 0.01);
+  CHECK(hitTest(t.objects, { 20, 15 }, 1) && hitTest(t.objects, { 20, 15 }, 1)->id == r.id);
+  CHECK(hitTest(t.objects, { 52, 40 }, 1) && !hitTest(t.objects, { 72, 40 }, 1));
+  Affine m = Affine::translate(5, 3) * Affine::rotation(0.5) * Affine::scaling(2, 3);
+  Point p = m.inverse().apply(m.apply({ 7, -4 }));
+  CHECK(std::abs(p.x - 7) < 1e-9 && std::abs(p.y + 4) < 1e-9);
+  // SVG round trip keeps the kinds, boxes, paint and transforms
+  std::string s = svg::write(t.objects, 100, 80);
+  svg::ReadResult back;
+  std::string err;
+  CHECK(svg::read(s, back, err) && back.objects.size() == 2);
+  if(back.objects.size() == 2) {
+    const VecObject &r2 = back.objects[0], &e2 = back.objects[1];
+    CHECK(r2.kind == EVecKind::Rect && r2.w == 30 && r2.fill.color == r.fill.color);
+    CHECK(e2.kind == EVecKind::Ellipse && e2.stroke.width == 4 && e2.xf.e == 2 && !e2.fill.visible());
+  }
+  // Plain SVG: path commands (relative, arcs), groups with inherited fill, viewBox scaling
+  svg::ReadResult plain;
+  CHECK(svg::read(R"(<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 100 50">
+    <g fill="#00ff00"><path d="M10 10 h20 v20 h-20 z"/><circle cx="70" cy="25" r="10" fill="blue"/></g>
+    <path d="M0 0 A 5 5 0 0 1 10 0" stroke="red" fill="none"/></svg>)", plain, err));
+  CHECK(plain.width == 200 && plain.objects.size() == 2 && plain.objects[0].kind == EVecKind::Group);
+  if(plain.objects.size() == 2) {
+    auto& g = plain.objects[0];
+    CHECK(g.children.size() == 2 && g.children[0].fill.color == Color{ 0, 255, 0, 255 }.pack() && g.xf.a == 2);
+    DRect ab = bounds(plain.objects[1], true);
+    CHECK(std::abs(ab.x1 - 20) < 0.5 && std::abs(ab.y0 + 10) < 0.5);
+  }
+  // .david keeps the objects next to the pixels
+  auto bytes = saveImageBytes(*doc, "david", err);
+  auto again = loadImageBytes(bytes, "", err);
+  CHECK(again && again->layers[0]->kind == ELayerKind::Vector && vectorTreeOf(*again->layers[0], 0)
+        && vectorTreeOf(*again->layers[0], 0)->objects.size() == 2 && again->layers[0]->get(25, 20) == r.fill.color);
+  // Undo of a vector edit puts the tree and pixels back
+  {
+    VectorChange ch(*doc);
+    ch.tree().objects.pop_back();
+    ch.tree().touch();
+    CHECK(ch.commit("Delete", ""));
+  }
+  CHECK(vectorTreeOf(l, 0)->objects.size() == 1 && (l.get(52, 40) >> 24) == 0);
+  doc->history.undo(*doc);
+  CHECK(vectorTreeOf(l, 0)->objects.size() == 2 && (l.get(52, 40) >> 24) > 200);
+}
+
 int main(int argc, char** argv) {
   auto dir = std::filesystem::temp_directory_path() / "david-tests";
   std::filesystem::create_directories(dir);
@@ -912,6 +980,7 @@ int main(int argc, char** argv) {
   testDither(dir);
   testFormats(dir);
   testAnimation(dir);
+  testVector();
   for(int i = 1; i < argc; i++) testExternal(argv[i], dir);
   std::printf(s_failed ? "%d FAILED\n" : "all passed\n", s_failed);
   return s_failed ? 1 : 0;

@@ -10,6 +10,9 @@
 #include "core/io/Anim.h"
 #include "core/io/Formats.h"
 #include "core/io/Png.h"
+#include "core/io/Svg.h"
+#include "core/Layer.h"
+#include "core/Vector.h"
 #include "platform/Paths.h"
 #include "render/ShaderRunner.h"
 #include "scripting/Mods.h"
@@ -157,6 +160,7 @@ struct Job {
   double fps = 0;
   std::string tag, sheet, slice;
   int scale = 1, loops = 0;
+  std::string trace;        // "pixel": the active layer traced into a vector layer, after the script
   EffectEnv env;
   ModHost* mods = nullptr;
 };
@@ -275,12 +279,27 @@ int process(Document& doc, const Job& job, std::string& error) {
     }
     if(!job.mods->runScript(job.script, doc, args, job.env, error)) return EFFECT;
   }
+  if(!job.trace.empty()) {
+    if(job.trace != "pixel") { error = "bad --trace '" + job.trace + "' (use pixel)"; return BAD_ARGS; }
+    // The traced objects replace the layer, so an SVG output holds just them
+    Layer& src = doc.active();
+    auto objects = tracePixels(src, src.frame());
+    auto layer = std::make_unique<Layer>(doc.width(), doc.height(), src.name);
+    layer->kind = ELayerKind::Vector;
+    layer->fitFrames(doc.frameCount(), doc.activeFrame);
+    VecTree& t = vectorTree(*layer, doc.activeFrame);
+    t.objects = std::move(objects);
+    t.touch();
+    rasterizeVectorCel(*layer, doc.activeFrame);
+    layer->setFrame(doc.activeFrame);
+    doc.layers[doc.activeLayer] = std::move(layer);
+  }
   return OK;
 }
 }
 
 int main(int argc, char** argv) {
-  CLI::App app{ "David image editor, headless.\n  david-cli in.png -o out.webp\n  david-cli in.png --effect gaussian-blur:radius=3 --effect outline:color=#000 -o out.png\n"
+  CLI::App app{ "David image editor, headless.\n  david-cli in.png -o out.webp\n  david-cli icon.svg --resize 256x256 -o icon.png\n  david-cli sprite.png --trace pixel -o sprite.svg\n  david-cli in.png --effect gaussian-blur:radius=3 --effect outline:color=#000 -o out.png\n"
                 "  david-cli in.png --script mods/x.lua --arg k=v -o -\n  david-cli --batch \"sprites/*.png\" --resize 200% --filter nearest --out-dir big/\n"
                 "  david-cli info in.david --json\n  david-cli --list-effects --json", "david-cli" };
   app.set_version_flag("--version", std::string("david-cli ") + DAVID_VERSION + " (mod API 1)");
@@ -293,7 +312,8 @@ int main(int argc, char** argv) {
   app.add_option("--effect", job.effects, "Effect to run, id:name=value,... (repeatable, runs in order)");
   app.add_option("--script", job.script, "Lua script to run on the image");
   app.add_option("--arg", job.args, "name=value for the script (repeatable)");
-  app.add_option("--resize", job.resize, "New size: 200% or 64x64 (runs before the effects)");
+  app.add_option("--resize", job.resize, "New size: 200% or 64x64 (runs before the effects; SVG input renders sharp at the new size)");
+  app.add_option("--trace", job.trace, "pixel: trace the active layer into vector shapes, one per color region (write .svg or .david)");
   app.add_option("--filter", job.filter, "Resampling: best, bicubic, bilinear, nearest, supersample");
   app.add_option("--format", job.format, "Output format when it can't come from the file name (png, webp, david, ...)");
   app.add_option("--quality", job.quality, "JPG / WebP quality 1-100 (WebP 100 = lossless)")->check(CLI::Range(1, 100));

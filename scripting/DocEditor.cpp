@@ -28,13 +28,41 @@ void DocEditor::flush() {
   for(auto& [id, rec] : _recs)
     if(auto edit = rec->finish("", "")) _step->parts.push_back(std::move(edit));
   _recs.clear();
+  for(auto& [id, b] : _vecs) {
+    Layer* l = _doc.findLayer(id);
+    const VecTree* now = l ? vectorTreeOf(*l, b.frame) : nullptr;
+    if(!now || now->revision == b.tree.revision) continue;
+    auto edit = std::make_unique<VectorEdit>();
+    edit->layerId = id;
+    edit->celFrame = b.frame;
+    edit->before = b.tree;
+    edit->after = *now;
+    rasterizeVectorCel(*l, b.frame);
+    _step->parts.push_back(std::move(edit));
+  }
+  _vecs.clear();
 }
 
-int DocEditor::addLayer(const std::string& name) {
+VecTree* DocEditor::vectors(int layer) {
+  if(layer < 0 || layer >= int(_doc.layers.size())) return nullptr;
+  Layer& l = *_doc.layers[layer];
+  if(l.kind != ELayerKind::Vector) return nullptr;
+  VecTree& t = vectorTree(l, _doc.activeFrame);
+  if(!_vecs.count(l.id())) _vecs[l.id()] = { _doc.activeFrame, t };
+  return &t;
+}
+
+int DocEditor::addLayer(const std::string& name, bool vector) {
   flush();
   auto act = std::make_unique<LayerInsert>();
   act->index = _doc.activeLayer + 1;
   act->layer = std::make_unique<Layer>(_doc.width(), _doc.height(), name);
+  if(vector) {
+    act->layer->kind = ELayerKind::Vector;
+    act->layer->fitFrames(_doc.frameCount(), _doc.activeFrame);
+    vectorTree(*act->layer, _doc.activeFrame).touch();
+    act->layer->setFrame(_doc.activeFrame);
+  }
   act->redo(_doc);
   int index = act->index;
   _doc.activeLayer = index;
@@ -113,6 +141,9 @@ void DocEditor::rollback() {
   _done = true;
   for(auto& [id, rec] : _recs) rec->restore();
   _recs.clear();
+  for(auto& [id, b] : _vecs)
+    if(Layer* l = _doc.findLayer(id)) { vectorTree(*l, b.frame) = b.tree; rasterizeVectorCel(*l, b.frame); }
+  _vecs.clear();
   for(auto it = _step->parts.rbegin(); it != _step->parts.rend(); ++it) (*it)->undo(_doc);
   _step->parts.clear();
   _doc.onChanged();

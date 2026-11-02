@@ -9,9 +9,13 @@ namespace david {
 
 enum class ELayerKind : uint8_t { Raster, Vector };
 
+struct VecTree;
+
 // One frame's image of a layer: a sparse grid of tiles. Frames can share one cel (linked cels).
+// A vector layer's cel also holds its objects; its tiles are their render at document resolution.
 struct Cel {
   std::vector<std::unique_ptr<Tile>> tiles;
+  std::shared_ptr<VecTree> vec;
 };
 
 // A sparse grid of tiles per animation frame. Missing tiles (and empty cels) read as transparent and are

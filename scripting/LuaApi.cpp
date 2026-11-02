@@ -6,6 +6,9 @@
 #include "core/Palette.h"
 #include "core/io/Png.h"
 #include "scripting/DocEditor.h"
+#include "core/Layer.h"
+#include "core/Vector.h"
+#include "core/io/Svg.h"
 #define SOL_ALL_SAFETIES_ON 1
 #include <sol/sol.hpp>
 #include <algorithm>
@@ -52,6 +55,74 @@ std::string errorOf(const sol::protected_function_result& r) {
 struct LImage { const Image* src; Image* dst; int ox, oy; };
 // The document inside a command or script, with the colors and palette of the moment
 struct LDoc { DocEditor* ed; EffectEnv env; };
+
+#pragma region [ Vector objects ]
+const char* kindName(EVecKind k) {
+  static const char* names[] = { "path", "rect", "ellipse", "polygon", "text", "group" };
+  return names[int(k)];
+}
+
+sol::table objectTable(sol::state_view L, const VecObject& o) {
+  sol::table t = L.create_table();
+  t["id"] = lua_Integer(o.id);
+  t["kind"] = kindName(o.kind);
+  t["name"] = o.name;
+  t["visible"] = o.visible;
+  t["opacity"] = o.opacity;
+  if(o.kind == EVecKind::Rect || o.kind == EVecKind::Ellipse || o.kind == EVecKind::Polygon || o.kind == EVecKind::Text) { t["x"] = o.x; t["y"] = o.y; }
+  if(o.kind == EVecKind::Rect || o.kind == EVecKind::Ellipse || o.kind == EVecKind::Polygon) { t["w"] = o.w; t["h"] = o.h; }
+  if(o.kind == EVecKind::Rect) t["radius"] = o.radius;
+  if(o.kind == EVecKind::Polygon) { t["sides"] = o.sides; t["inner"] = o.inner; }
+  if(o.kind == EVecKind::Path) t["d"] = svg::pathString(o.paths);
+  if(o.kind == EVecKind::Text) { t["text"] = o.text; t["size"] = o.size; }
+  if(o.fill.type == EPaintType::Solid) t["fill"] = lua_Integer(o.fill.color);
+  else t["fill"] = false;
+  if(o.stroke.paint.type == EPaintType::Solid) t["stroke"] = lua_Integer(o.stroke.paint.color);
+  else t["stroke"] = false;
+  t["width"] = o.stroke.width;
+  const Affine& m = o.xf;
+  t["transform"] = "matrix(" + std::to_string(m.a) + " " + std::to_string(m.b) + " " + std::to_string(m.c) + " " + std::to_string(m.d) + " " + std::to_string(m.e) + " " + std::to_string(m.f) + ")";
+  DRect b = bounds(o, true);
+  t["bounds"] = L.create_table_with("x", b.x0, "y", b.y0, "w", b.width(), "h", b.height());
+  return t;
+}
+
+// Fields of t onto o; kind only on a new object
+void applyFields(VecObject& o, const sol::table& t, bool fresh) {
+  if(fresh) {
+    std::string k = t.get_or<std::string>("kind", "path");
+    static const char* names[] = { "path", "rect", "ellipse", "polygon", "text", "group" };
+    auto it = std::find_if(std::begin(names), std::end(names), [&](const char* n) { return k == n; });
+    if(it == std::end(names) || k == "group") throw std::runtime_error("object kind is path, rect, ellipse, polygon or text");
+    o.kind = EVecKind(it - std::begin(names));
+    if(o.kind == EVecKind::Text && !t["font"].valid()) throw std::runtime_error("a text object needs font (a font file path)");
+  }
+  if(auto v = t.get<sol::optional<std::string>>("name")) o.name = *v;
+  if(auto v = t.get<sol::optional<bool>>("visible")) o.visible = *v;
+  if(auto v = t.get<sol::optional<double>>("opacity")) o.opacity = std::clamp(*v, 0.0, 1.0);
+  if(auto v = t.get<sol::optional<double>>("x")) o.x = *v;
+  if(auto v = t.get<sol::optional<double>>("y")) o.y = *v;
+  if(auto v = t.get<sol::optional<double>>("w")) o.w = *v;
+  if(auto v = t.get<sol::optional<double>>("h")) o.h = *v;
+  if(auto v = t.get<sol::optional<double>>("radius")) o.radius = std::max(0.0, *v);
+  if(auto v = t.get<sol::optional<int>>("sides")) o.sides = std::clamp(*v, 3, 64);
+  if(auto v = t.get<sol::optional<double>>("inner")) o.inner = std::clamp(*v, 0.01, 1.0);
+  if(auto v = t.get<sol::optional<std::string>>("d")) { o.paths = svg::parsePathString(*v); if(o.kind != EVecKind::Path) o.kind = EVecKind::Path; }
+  if(auto v = t.get<sol::optional<std::string>>("text")) o.text = *v;
+  if(auto v = t.get<sol::optional<std::string>>("font")) o.font = *v;
+  if(auto v = t.get<sol::optional<double>>("size")) o.size = std::max(1.0, *v);
+  if(auto v = t.get<sol::optional<std::string>>("transform")) o.xf = svg::parseTransformString(*v);
+  auto paint = [&](const char* key, VecPaint& p) {
+    sol::object v = t[key];
+    if(!v.valid()) return;
+    if(v.is<bool>() && !v.as<bool>()) p = {};
+    else if(v.is<lua_Integer>()) p = VecPaint::solid(uint32_t(v.as<lua_Integer>()));
+  };
+  paint("fill", o.fill);
+  paint("stroke", o.stroke.paint);
+  if(auto v = t.get<sol::optional<double>>("width")) o.stroke.width = std::max(0.0, *v);
+}
+#pragma endregion
 struct LLayer {
   DocEditor* ed;
   uint64_t id;
@@ -159,7 +230,81 @@ void bindTypes(LuaRuntime& rt) {
     //@sig layer:set(x, y, color)
     //@doc Writes a pixel. It ignores the selection; check doc:selected(x, y) to respect it.
     //@ex if doc:selected(x, y) > 0 then layer:set(x, y, c) end
-    "set", [](LLayer& l, int x, int y, lua_Integer c) { l.ed->set(l.index(), x, y, uint32_t(c)); });
+    "set", [](LLayer& l, int x, int y, lua_Integer c) { l.ed->set(l.index(), x, y, uint32_t(c)); },
+    //@api lua Layer.isVector
+    //@sig layer.isVector -> boolean
+    //@doc True for a vector layer (objects instead of pixels; Settings > Beta tools > Vector support).
+    "isVector", sol::property([](const LLayer& l) { return l.layer() && l.layer()->kind == ELayerKind::Vector; }),
+    //@api lua Layer:objects
+    //@sig layer:objects() -> { object, ... }
+    //@doc A vector layer's objects on the active frame, bottom to top, as tables (a copy): id, kind ("path", "rect", "ellipse", "polygon", "text", "group"), name, x, y, w, h, radius, sides, inner, d (path data), text, size, fill and stroke (colors, or false), width, opacity, transform, bounds.
+    //@ex for _, o in ipairs(layer:objects()) do david.log(o.kind .. " " .. o.id) end
+    "objects", [](LLayer& l, sol::this_state s) {
+      sol::state_view L(s);
+      sol::table out = L.create_table();
+      VecTree* t = l.ed->vectors(l.index());
+      if(!t) return out;
+      int i = 1;
+      for(auto& o : t->objects) out[i++] = objectTable(L, o);
+      return out;
+    },
+    //@api lua Layer:addObject
+    //@sig layer:addObject(fields) -> integer id
+    //@doc Adds an object on top of a vector layer. kind is "rect", "ellipse", "polygon" (x, y, w, h; radius; sides, inner), "path" (d, SVG path data) or "text" (text, font file, size, x, y); fill and stroke are colors (david.rgba) or false, width the line width, transform an SVG transform list.
+    //@ex layer:addObject({ kind = "polygon", x = 10, y = 10, w = 80, h = 80, sides = 5, inner = 0.5, fill = david.rgba(255, 200, 0) })
+    "addObject", [](LLayer& l, sol::table fields) -> lua_Integer {
+      VecTree* t = l.ed->vectors(l.index());
+      if(!t) throw std::runtime_error("not a vector layer");
+      VecObject o;
+      o.id = newObjectId();
+      applyFields(o, fields, true);
+      t->objects.push_back(std::move(o));
+      t->touch();
+      return lua_Integer(t->objects.back().id);
+    },
+    //@api lua Layer:setObject
+    //@sig layer:setObject(id, fields) -> boolean
+    //@doc Changes the given fields of an object (the same fields as addObject, but kind); false when there's no such object.
+    //@ex layer:setObject(id, { fill = david.rgba(0, 0, 0), transform = "rotate(45 50 50)" })
+    "setObject", [](LLayer& l, lua_Integer id, sol::table fields) {
+      VecTree* t = l.ed->vectors(l.index());
+      VecObject* o = t ? findObject(t->objects, uint64_t(id)) : nullptr;
+      if(!o) return false;
+      applyFields(*o, fields, false);
+      t->touch();
+      return true;
+    },
+    //@api lua Layer:removeObject
+    //@sig layer:removeObject(id) -> boolean
+    //@doc Removes an object from a vector layer.
+    "removeObject", [](LLayer& l, lua_Integer id) {
+      VecTree* t = l.ed->vectors(l.index());
+      if(!t) return false;
+      size_t n = std::erase_if(t->objects, [&](const VecObject& o) { return o.id == uint64_t(id); });
+      if(n) t->touch();
+      return n > 0;
+    },
+    //@api lua Layer:svg
+    //@sig layer:svg() -> string
+    //@doc A vector layer's objects as an SVG document.
+    "svg", [](LLayer& l) {
+      VecTree* t = l.ed->vectors(l.index());
+      return t ? svg::write(t->objects, l.ed->doc().width(), l.ed->doc().height()) : std::string();
+    },
+    //@api lua Layer:addSvg
+    //@sig layer:addSvg(text) -> integer
+    //@doc Adds the objects of an SVG document on top of a vector layer; returns how many.
+    //@ex layer:addSvg('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="10" fill="red"/></svg>')
+    "addSvg", [](LLayer& l, const std::string& text) {
+      VecTree* t = l.ed->vectors(l.index());
+      if(!t) throw std::runtime_error("not a vector layer");
+      svg::ReadResult r;
+      std::string err;
+      if(!svg::read(text, r, err)) throw std::runtime_error(err);
+      for(auto& o : r.objects) { renumber(o); t->objects.push_back(std::move(o)); }
+      t->touch();
+      return int(r.objects.size());
+    });
 
   L.new_usertype<LDoc>("Document", sol::no_constructor,
     //@api lua Document.width
@@ -200,6 +345,11 @@ void bindTypes(LuaRuntime& rt) {
     //@sig doc:addLayer(name) -> Layer
     //@doc Adds an empty layer above the active one and makes it active.
     "addLayer", [](LDoc& d, const std::string& name) { int i = d.ed->addLayer(name); return LLayer{ d.ed, d.ed->doc().layers[i]->id() }; },
+    //@api lua Document:addVectorLayer
+    //@sig doc:addVectorLayer(name) -> Layer
+    //@doc Adds an empty vector layer above the active one and makes it active.
+    //@ex local v = doc:addVectorLayer("Shapes"); v:addObject({ kind = "ellipse", x = 0, y = 0, w = 40, h = 40, fill = doc.primary })
+    "addVectorLayer", [](LDoc& d, const std::string& name) { int i = d.ed->addLayer(name, true); return LLayer{ d.ed, d.ed->doc().layers[i]->id() }; },
     //@api lua Document:deleteLayer
     //@sig doc:deleteLayer(index) -> boolean
     //@doc Deletes a layer; the last one can't be deleted.

@@ -1,5 +1,6 @@
 #include "core/Layer.h"
 #include "core/Color.h"
+#include "core/Vector.h"
 #include <algorithm>
 #include <atomic>
 #include <map>
@@ -134,6 +135,7 @@ std::shared_ptr<Cel> Layer::copyCel(int frame) const {
   c->tiles.resize(src->tiles.size());
   for(size_t i = 0; i < src->tiles.size(); i++)
     if(src->tiles[i]) c->tiles[i] = src->tiles[i]->clone();
+  if(src->vec) c->vec = std::make_shared<VecTree>(*src->vec);
   return c;
 }
 

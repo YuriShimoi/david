@@ -124,6 +124,24 @@ try:
     code2, out, err2 = run('info', os.path.join(tmp, 'more.gif'), '--json')
     fr = json.loads(out).get('frames', []) if code2 == 0 else []
     check('Lua frame API', code == 0 and len(fr) == 13 and fr[2]['duration'] == 500, err + err2)
+    # Vector layers: the Lua object API, SVG output and input, pixel-art trace
+    script = os.path.join(tmp, 'vec.lua')
+    with open(script, 'w') as f:
+        f.write('local doc = david.image\nlocal v = doc:addVectorLayer("Shapes")\nassert(v.isVector)\n'
+                'local id = v:addObject({ kind = "polygon", x = 5, y = 5, w = 20, h = 20, sides = 5, inner = 0.5, fill = david.rgba(255, 200, 0) })\n'
+                'v:addObject({ kind = "path", d = "M0 0 L10 0 L10 10 Z", stroke = david.rgba(0, 0, 0), width = 2, fill = false })\n'
+                'assert(#v:objects() == 2 and v:objects()[1].id == id and v:objects()[1].kind == "polygon")\n'
+                'v:setObject(id, { transform = "translate(5 0)" })\nassert(v:objects()[1].bounds.x > 9)\n'
+                'assert(v:addSvg(\'<svg xmlns="http://www.w3.org/2000/svg"><circle cx="30" cy="20" r="5" fill="red"/></svg>\') == 1)\n')
+    vsvg = os.path.join(tmp, 'vec.svg')
+    code, _, err = run(src, '--script', script, '-o', vsvg)
+    body = open(vsvg, encoding='utf-8').read() if os.path.exists(vsvg) else ''
+    check('Lua vector API to SVG', code == 0 and body.count('<polygon') == 1 and body.count('<ellipse') == 1 and '<image' in body, err)
+    code, out, err = run(vsvg, '--resize', '200%', '-o', os.path.join(tmp, 'vec.png'))
+    code2, out2, err2 = run('info', os.path.join(tmp, 'vec.png'), '--json')
+    check('SVG input renders at a new size', code == 0 and code2 == 0 and json.loads(out2)['width'] == 80, err + err2)
+    code, _, err = run(src, '--trace', 'pixel', '-o', os.path.join(tmp, 'traced.svg'))
+    check('--trace pixel writes shapes', code == 0 and open(os.path.join(tmp, 'traced.svg'), encoding='utf-8').read().count('<path') >= 1, err)
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 

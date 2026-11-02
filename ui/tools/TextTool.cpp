@@ -2,6 +2,7 @@
 #include "core/Document.h"
 #include "core/Paint.h"
 #include "core/Stroke.h"
+#include "ui/tools/VectorTools.h"
 #include "core/TextLayout.h"
 #include "platform/Fonts.h"
 #include "platform/Paths.h"
@@ -113,9 +114,10 @@ public:
 
   void commit(ToolHost& h) override {
     if(!_editing) return;
-    if(_text.empty()) _edit.cancel();
+    if(_text.empty()) { _edit.cancel(); _live.cancel(h); }
     else {
       _edit.commit(h.doc(), name, icon);
+      if(_live.active()) _live.commit(h, name, icon);
       remember(h);
     }
     _editing = _moving = false;
@@ -214,6 +216,7 @@ public:
 
 private:
   LiveEdit _edit;
+  LiveObject _live;
   TextBlock _block;
   std::u32string _text;
   size_t _caret = 0;
@@ -263,6 +266,28 @@ private:
 
   void render(ToolHost& h) {
     Document& doc = h.doc();
+    if(h.vectorMode()) {
+      // On a vector layer: a text object (the layout only places the caret)
+      TextStyle st = style(h);
+      _block = layoutText(_text, st, _x, _y, 1, 1);
+      if(_text.empty() && !_live.active()) return;
+      VecObject o;
+      o.kind = EVecKind::Text;
+      o.name = "Text";
+      for(char32_t c : _text) {
+        // UTF-32 to UTF-8
+        if(c < 0x80) o.text += char(c);
+        else if(c < 0x800) { o.text += char(0xC0 | (c >> 6)); o.text += char(0x80 | (c & 0x3F)); }
+        else if(c < 0x10000) { o.text += char(0xE0 | (c >> 12)); o.text += char(0x80 | ((c >> 6) & 0x3F)); o.text += char(0x80 | (c & 0x3F)); }
+        else { o.text += char(0xF0 | (c >> 18)); o.text += char(0x80 | ((c >> 12) & 0x3F)); o.text += char(0x80 | ((c >> 6) & 0x3F)); o.text += char(0x80 | (c & 0x3F)); }
+      }
+      o.font = st.path; o.fontIndex = st.index; o.size = st.size;
+      o.bold = st.synthBold; o.italic = st.synthItalic; o.align = st.align;
+      o.x = _x; o.y = _y;
+      o.fill = VecPaint::solid(_color);
+      _live.set(h, std::move(o));
+      return;
+    }
     TileRecorder& rec = _edit.redraw(doc);
     _block = layoutText(_text, style(h), _x, _y, doc.width(), doc.height());
     StrokeSpace sp = strokeSpace(h.settings(), doc);

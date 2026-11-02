@@ -35,6 +35,7 @@ public:
   uint64_t revision = 0;
   double dpi = 96;  // print resolution, pixels per inch
   std::vector<uint32_t> palette;  // saved in .david files; empty = none
+  std::vector<uint64_t> selectedObjects;  // vector objects picked on the active layer (not saved)
 
   // Animation: every layer has one cel per frame. A one-frame document is a plain image.
   std::vector<Frame> frames = { Frame{} };

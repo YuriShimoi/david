@@ -1,4 +1,7 @@
 #include "app/App.h"
+#include "core/Layer.h"
+#include "core/Vector.h"
+#include "core/io/Formats.h"
 #include "core/Draw.h"
 #include "core/Palette.h"
 #include "core/Blend.h"
@@ -910,11 +913,142 @@ void App::selftestStep(int frame) {
         check("Gradient follows symmetry", std::abs(l - r) <= 2 && l < 100);
         _cfg.tools.symmetry = 0;
         _round8 = 0;
+        _round9 = frame;
         break;
       }
     }
   }
 
+  // Round 9 (1.2.0 vector layers): shapes as objects, the Mouse and Node tools, the raster question, text,
+  // trace, SVG export and import, object copy and paste
+  if(_round9 && frame > _round9) {
+    int f = frame - _round9;
+    auto at = [&](double x, double y) { return toScreen(x + 0.5, y + 0.5); };
+    auto imgPx = [&](int x, int y) { return _doc->active().get(x, y); };
+    auto key = [this](SDL_Keycode k, SDL_Scancode sc) {
+      SDL_Event e{};
+      e.key.windowID = SDL_GetWindowID(_window);
+      e.type = SDL_EVENT_KEY_DOWN; e.key.key = k; e.key.scancode = sc; e.key.down = true;
+      SDL_PushEvent(&e);
+      e.type = SDL_EVENT_KEY_UP; e.key.down = false;
+      SDL_PushEvent(&e);
+    };
+    auto dragImg = [&](double x0, double y0, double x1, double y1) { ImVec2 a = at(x0, y0), b = at(x1, y1); drag(a.x, a.y, b.x, b.y, SDL_BUTTON_LEFT); };
+    auto clickImg = [&](double x, double y) {
+      ImVec2 a = at(x, y);
+      push(SDL_EVENT_MOUSE_MOTION, a.x, a.y, 0);
+      push(SDL_EVENT_MOUSE_BUTTON_DOWN, a.x, a.y, SDL_BUTTON_LEFT);
+      push(SDL_EVENT_MOUSE_BUTTON_UP, a.x, a.y, SDL_BUTTON_LEFT);
+    };
+    auto objects = [&]() -> std::vector<VecObject>& { return vectorTree(_doc->active(), _doc->activeFrame).objects; };
+    switch(f) {
+      case 1:
+        _cfg.betaVector = true;
+        setDocument(Document::blank(200, 150, WHITE));
+        _nav.actualSize();
+        _nav.centerOn(100, 75);
+        _commands.run("layer.addVector");
+        check("Add New Vector Layer makes a vector layer", _doc->layers.size() == 2 && _doc->active().kind == ELayerKind::Vector && vectorMode());
+        use(ETool::Shapes);
+        _cfg.tools.shapeKind = int(EShapeKind::Rect);
+        _cfg.tools.shapeDraw = 2;
+        _cfg.tools.brushSize = 4;
+        _primary = BLACK; _secondary = RED;
+        dragImg(20, 20, 80, 60);
+        key(SDLK_RETURN, SDL_SCANCODE_RETURN);
+        break;
+      case 3: {
+        auto& objs = objects();
+        check("Shapes on a vector layer makes an object", objs.size() == 1 && objs[0].kind == EVecKind::Rect && objs[0].fill.color == RED && objs[0].stroke.width == 4);
+        check("its pixels follow on commit", imgPx(50, 40) == RED && imgPx(22, 40) == BLACK && (imgPx(10, 10) >> 24) == 0);
+        use(ETool::Mouse);
+        dragImg(50, 40, 60, 50);
+        break;
+      }
+      case 5: {
+        auto& objs = objects();
+        check("the Mouse tool picks and moves objects", _doc->selectedObjects.size() == 1 && !objs.empty() && std::abs(objs[0].xf.e - 10) < 0.6 && std::abs(objs[0].xf.f - 10) < 0.6
+              && imgPx(85, 65) == RED && _doc->history.at(_doc->history.count() - 1).name == "Move Objects");
+        writeShot(_selftestDir + "/p9-vector-select.png");
+        use(ETool::Node);
+        dragImg(30, 30, 10, 10);
+        break;
+      }
+      case 7: {
+        auto& objs = objects();
+        check("the Node tool turns the shape into a path and moves its node", !objs.empty() && objs[0].kind == EVecKind::Path && (imgPx(14, 14) >> 24) > 0
+              && _doc->history.at(_doc->history.count() - 1).name == "Edit Nodes");
+        writeShot(_selftestDir + "/p9-vector-nodes.png");
+        // A raster tool on a vector layer asks first
+        use(ETool::Brush);
+        clickImg(150, 120);
+        break;
+      }
+      case 9: {
+        check("a raster tool on a vector layer asks first", ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) && objects().size() == 1);
+        ImGui::ClosePopupToLevel(0, false);
+        _afterRaster = nullptr;
+        break;
+      }
+      case 10:
+        // Text as an object (any system font the Text tool finds)
+        use(ETool::Text);
+        clickImg(100, 90);
+        break;
+      case 12: {
+        for(char c : std::string("Hi")) tool().onText(*this, unsigned(c));
+        tool().commit(*this);
+        auto& objs = objects();
+        bool text = objs.size() == 2 && objs[1].kind == EVecKind::Text && objs[1].text == "Hi";
+        DRect b = text ? bounds(objs[1], true) : DRect{};
+        check("Text on a vector layer makes a text object with outlines", text && !b.empty() && b.width() > 5);
+        // Copy and paste objects
+        use(ETool::Mouse);
+        _doc->selectedObjects = { objs[0].id };
+        _commands.run("edit.copy");
+        _commands.run("edit.paste");
+        check("copied objects paste as objects", objects().size() == 3 && _doc->selectedObjects.size() == 1 && _doc->selectedObjects[0] != objects()[0].id);
+        // SVG export and open
+        exportSvg(_selftestDir + "/vector.svg");
+        std::string err;
+        auto back = loadImage(_selftestDir + "/vector.svg", err);
+        bool ok = back && back->layers.size() == 1 && back->layers[0]->kind == ELayerKind::Vector;
+        const VecTree* t = ok ? vectorTreeOf(*back->layers[0], 0) : nullptr;
+        // The file has the Background as an image (skipped on reading) and the vector layer's objects in a group
+        check("Export SVG writes the image, Open reads its objects", t && !t->objects.empty());
+        // Trace the background (one white region)
+        _doc->activeLayer = 0;
+        _commands.run("image.trace");
+        check("Trace Pixels makes a vector layer of shapes", _doc->layers.size() == 3 && _doc->active().kind == ELayerKind::Vector && objects().size() == 1
+              && objects()[0].fill.color == WHITE);
+        _commands.run("edit.undo");
+        _doc->activeLayer = 1;
+        _nav.zoomAt(4, _nav.view.vpX + _nav.view.vpW / 2.0, _nav.view.vpY + _nav.view.vpH / 2.0);
+        break;
+      }
+      case 14:
+        writeShot(_selftestDir + "/p9-vector-zoom.png");
+        _cfg.vectorPixels = true;
+        break;
+      case 16:
+        writeShot(_selftestDir + "/p9-vector-pixels.png");
+        _cfg.vectorPixels = false;
+        _cfg.betaVector = false;
+        {
+          bool hidden = false;
+          for(auto& t : _tools) if(t->id == ETool::Node) hidden = toolHidden(*t);
+          check("with vector support off the Node tool hides", hidden && !vectorMode());
+        }
+        _round9 = 0;
+        break;
+    }
+  }
+
+  // One round on its own: it starts at once, and the rest is skipped
+  if(_selftestOnly) {
+    if(frame == 3) { if(_selftestOnly == 8) _round8 = frame; else if(_selftestOnly == 9) _round9 = frame; }
+    return;
+  }
   switch(frame) {
     #pragma region [ Phase 1: pencil, undo, zoom, save ]
     case 3: _nav.actualSize(); _secondary = RED; use(ETool::Pencil); break;

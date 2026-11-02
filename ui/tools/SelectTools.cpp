@@ -611,7 +611,7 @@ std::unique_ptr<Tool> makeMovePixels() { return std::make_unique<MoveTool>(true)
 std::unique_ptr<Tool> makeMoveSelection() { return std::make_unique<MoveTool>(false); }
 
 std::unique_ptr<Tool> makeMouse(), makeBrush(), makeEraser(), makePencil(), makeBucket(), makePicker(), makeZoom(), makePan(), makeSpray();
-std::unique_ptr<Tool> makeGradient(), makeLine(), makeCurve(), makeShapes(), makeText();
+std::unique_ptr<Tool> makeGradient(), makeLine(), makeCurve(), makeShapes(), makeText(), makeNode();
 
 std::vector<std::unique_ptr<Tool>> createTools() {
   // Paint.NET's Tools window order, two per row
@@ -634,6 +634,8 @@ std::vector<std::unique_ptr<Tool>> createTools() {
   list.push_back(makeLine());
   list.push_back(makeCurve());
   list.push_back(makeShapes());
+  // Vector layers (hidden unless Beta tools > Vector support is on)
+  list.push_back(makeNode());
   return list;
 }
 

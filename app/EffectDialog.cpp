@@ -26,6 +26,7 @@ EffectEnv App::effectEnv() {
 void App::openEffect(const std::string& id) {
   const Effect* e = findEffect(id);
   if(!e) return;
+  if(!rasterGuard([this, id] { openEffect(id); })) return;
   commitTool();
   _fx = e;
   auto last = _fxRemember.find(id);
