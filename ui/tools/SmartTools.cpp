@@ -3,6 +3,7 @@
 #include "core/Draw.h"
 #include "core/Gradient.h"
 #include "core/Paint.h"
+#include "core/Stroke.h"
 #include "ui/CanvasNav.h"
 #include "core/Text.h"
 #include "ui/I18n.h"
@@ -148,6 +149,8 @@ private:
     g.type = EGradType(std::clamp(s.gradType, 0, int(EGradType::COUNT) - 1));
     g.space = EGradSpace(std::clamp(s.gradSpace, 0, int(EGradSpace::COUNT) - 1));
     g.alphaMode = s.gradAlpha;
+    StrokeSpace sp = strokeSpace(s, h.doc());
+    g.mirrorX = sp.mirrorX; g.mirrorY = sp.mirrorY; g.axisX = sp.axisX; g.axisY = sp.axisY;
     g.pixelArt = s.gradPixel;
     g.a = _a; g.b = _b;
     g.stops = _stops;
@@ -535,7 +538,8 @@ private:
         if(s.pixelPerfect) pixelPolyline(m, part, true);
         else strokePolyline(m, part, w, s.antialias);
       }
-      paintCoverage(doc, rec, { { &m, _color } });
+      StrokeSpace sp = strokeSpace(s, doc);
+      paintCoverage(doc, rec, { { &m, _color } }, &sp);
     }
     doc.onChanged();
   }
@@ -805,9 +809,10 @@ private:
         Polyline inner = shapeContour(k, _a.x, _a.y, _b.x, _b.y, w, s.cornerRadius, s.polySides);
         line = inner.size() >= 3 ? fillContours(doc.width(), doc.height(), { outer, inner }, s.antialias) : fill->clone();
       }
-      if(s.shapeDraw == 0) paintCoverage(doc, rec, { { line.get(), _primary } });
-      else if(s.shapeDraw == 1) paintCoverage(doc, rec, { { fill.get(), _primary } });
-      else paintCoverage(doc, rec, { { fill.get(), _secondary }, { line.get(), _primary } });
+      StrokeSpace sp = strokeSpace(s, doc);
+      if(s.shapeDraw == 0) paintCoverage(doc, rec, { { line.get(), _primary } }, &sp);
+      else if(s.shapeDraw == 1) paintCoverage(doc, rec, { { fill.get(), _primary } }, &sp);
+      else paintCoverage(doc, rec, { { fill.get(), _secondary }, { line.get(), _primary } }, &sp);
     }
     doc.onChanged();
   }

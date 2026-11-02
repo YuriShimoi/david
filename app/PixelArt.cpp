@@ -24,6 +24,8 @@ static ImVec4 toVec(uint32_t c) {
 static void choiceButton(const char* id, const char* icon, int& value, const char* tip, std::initializer_list<const char*> names) {
   bool on = value != 0;
   if(ui::iconToggle(id, icon, on, tr(tip))) ImGui::OpenPopup(id);
+  // The menu hangs right under its button, not at the mouse
+  ImGui::SetNextWindowPos({ ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y }, ImGuiCond_Appearing);
   if(ImGui::BeginPopup(id)) {
     int i = 0;
     for(const char* n : names) {
@@ -37,7 +39,7 @@ static void choiceButton(const char* id, const char* icon, int& value, const cha
 void App::pixelArtBar() {
   auto& t = _cfg.tools;
   ImGui::SameLine();
-  choiceButton("##symmetry", ICON_TB_FLIP_VERTICAL, t.symmetry, "Symmetry", { N_("Off"), N_("Left and right"), N_("Top and bottom"), N_("Both") });
+  choiceButton("##symmetry", ICON_TB_FLIP_HORIZONTAL, t.symmetry, "Symmetry", { N_("Off"), N_("Left and right"), N_("Top and bottom"), N_("Both") });
   ImGui::SameLine();
   choiceButton("##tiled", ICON_TB_GRID_4X4, t.tiled, N_("Tiled mode (strokes wrap around the edges)"), { N_("Off"), N_("Wrap X"), N_("Wrap Y"), N_("Wrap both") });
   ImGui::SameLine();

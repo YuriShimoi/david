@@ -117,10 +117,8 @@ bool Theme::save(const std::string& path, std::string& error) const {
   for(auto& t : colorTokens()) j["colors"][t.key] = colorToHex(this->*t.member);
   for(auto& t : shapeTokens()) j["shape"][t.key] = this->*t.member;
   j["shape"]["font"] = font;
-  std::ofstream out(pathFromUtf8(path));
-  if(!out) { error = "can't write " + path; return false; }
-  out << j.dump(2) << '\n';
-  return bool(out);
+  std::string text = j.dump(2) + '\n';
+  return writeFileAtomic(path, { text.begin(), text.end() }, error);
 }
 #pragma endregion
 

@@ -132,7 +132,7 @@ private:
   std::string _notice;
   int _settingsSeen = 0;
   uint64_t _reloadAt = 0;
-  int _round2 = 0, _round3 = 0, _round4 = 0, _round5 = 0, _round6 = 0, _round7 = 0;
+  int _round2 = 0, _round3 = 0, _round4 = 0, _round5 = 0, _round6 = 0, _round7 = 0, _round8 = 0;
   int _probeGray = 0;  // a screen value one self-test step compares with the next
   bool _selftestMods = false;  // the self-test turns the example mods on
   #pragma endregion
@@ -156,6 +156,7 @@ private:
   void settingsAppearance();
   void settingsTools();
   void settingsCanvas();
+  void settingsBeta();
   void settingsShortcuts();
   void settingsPaths();
   void updateTitle();
@@ -296,6 +297,14 @@ private:
   // Every setting back to the defaults (theme, shortcuts, tools, windows and layout, mods on/off)
   void resetAllSettings();
   void drawResetDialog();
+  // Clipboard (app/Clipboard.cpp)
+  enum class EPaste : uint8_t { Layer, NewLayer, NewImage };
+  Lifted _pasted;
+  EPaste _pasteWhere = EPaste::Layer;
+  void copyImage(bool merged, bool cut);
+  void pasteImage(EPaste where);
+  void placePaste(bool grow);
+  void drawPasteDialog();
   // Mod windows: open ones by "<mod>/<id>" are in _cfg.modWindows; a window whose draw failed shows its error
   std::map<std::string, std::string> _modWindowError;
   bool modWindowOpen(const std::string& key) const;

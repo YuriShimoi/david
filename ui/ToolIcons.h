@@ -29,7 +29,7 @@
 #define ICON_TB_SCRIBBLE "\xee\xa8\x95"
 #define ICON_TB_WAVE_SINE "\xee\xa8\x96"
 #define ICON_PH_CHECKERBOARD "\xee\xa8\x97"
-#define ICON_TB_FLIP_VERTICAL "\xee\xa8\x98"
+#define ICON_TB_FLIP_HORIZONTAL "\xee\xa8\x98"
 #define ICON_TB_GRID_4X4 "\xee\xa8\x99"
 #define ICON_TB_GRID_3X3 "\xee\xa8\x9a"
 #define ICON_PH_MAGNET "\xee\xa8\x9b"

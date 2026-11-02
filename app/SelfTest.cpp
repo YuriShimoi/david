@@ -833,7 +833,85 @@ void App::selftestStep(int frame) {
         _cfg.showTimeline = false;
         _cfg.showAnimPreview = false;
         _round7 = 0;
+        _round8 = frame;
         break;
+    }
+  }
+
+  // Round 8 (1.1.0 fixes): copy and paste, the larger-paste question, symmetry on Line and Gradient
+  if(_round8 && frame > _round8) {
+    int f = frame - _round8;
+    auto at = [&](double x, double y) { return toScreen(x + 0.5, y + 0.5); };
+    auto imgPx = [&](int x, int y) { return _doc->active().get(x, y); };
+    auto key = [this](SDL_Keycode k, SDL_Scancode sc) {
+      SDL_Event e{};
+      e.key.windowID = SDL_GetWindowID(_window);
+      e.type = SDL_EVENT_KEY_DOWN; e.key.key = k; e.key.scancode = sc; e.key.down = true;
+      SDL_PushEvent(&e);
+      e.type = SDL_EVENT_KEY_UP; e.key.down = false;
+      SDL_PushEvent(&e);
+    };
+    switch(f) {
+      case 1: {
+        setDocument(Document::blank(100, 80, WHITE));
+        _nav.actualSize();
+        _nav.centerOn(50, 40);
+        auto sel = std::make_unique<Mask>(100, 80);
+        for(int y = 10; y < 20; y++) { sel->fillSpan(y, 10, 19, 255); for(int x = 10; x < 20; x++) _doc->active().set(x, y, RED); }
+        _doc->selection = std::move(sel);
+        _commands.run("edit.copy");
+        check("Copy puts the selection on the clipboard as PNG and BMP", SDL_HasClipboardData("image/png") && SDL_HasClipboardData("image/bmp"));
+        _commands.run("edit.deselect");
+        int steps = _doc->history.count();
+        _commands.run("edit.paste");
+        check("Paste floats the pixels on Move Selected Pixels", tool().id == ETool::MovePixels && tool().busy());
+        tool().commit(*this);
+        check("the paste lands at the visible top-left as one step", imgPx(0, 0) == RED && imgPx(9, 9) == RED && imgPx(10, 10) == RED && imgPx(25, 25) == WHITE
+              && _doc->history.count() == steps + 1 && _doc->history.at(_doc->history.count() - 1).name == "Paste");
+        _commands.run("edit.pasteLayer");
+        tool().commit(*this);
+        check("Paste into New Layer adds a layer", _doc->layers.size() == 2 && _doc->active().get(5, 5) == RED);
+        // Larger than the canvas: the question comes first, then the canvas grows to fit
+        setDocument(Document::blank(5, 5, WHITE));
+        _commands.run("edit.paste");
+        check("a paste larger than the canvas asks first", _popup == "###pastebig" && !tool().busy());
+        _popup.clear();
+        placePaste(true);
+        tool().commit(*this);
+        check("Expand canvas grows it to the pasted size", _doc->width() == 10 && _doc->height() == 10 && imgPx(9, 9) == RED);
+        break;
+      }
+      case 2: {
+        // Symmetry left-right: a line on the left half shows up mirrored on the right
+        setDocument(Document::blank(100, 80, WHITE));
+        _nav.actualSize();
+        _nav.centerOn(50, 40);
+        _primary = BLACK;
+        _cfg.tools.symmetry = 1; _cfg.tools.symX = -1;
+        _cfg.tools.brushSize = 2; _cfg.tools.antialias = false; _cfg.tools.pixelPerfect = false; _cfg.tools.dash = 0;
+        use(ETool::Line);
+        ImVec2 a = at(10, 30), b = at(30, 30);
+        drag(a.x, a.y, b.x, b.y, SDL_BUTTON_LEFT);
+        key(SDLK_RETURN, SDL_SCANCODE_RETURN);
+        break;
+      }
+      case 4: {
+        check("Line follows symmetry", imgPx(20, 30) == BLACK && imgPx(79, 30) == BLACK && imgPx(50, 30) == WHITE);
+        _cfg.tools.gradType = 0;
+        _primary = BLACK; _secondary = WHITE;
+        use(ETool::Gradient);
+        ImVec2 a = at(0, 60), b = at(49, 60);
+        drag(a.x, a.y, b.x, b.y, SDL_BUTTON_LEFT);
+        key(SDLK_RETURN, SDL_SCANCODE_RETURN);
+        break;
+      }
+      case 6: {
+        int l = int(imgPx(10, 60) & 0xFF), r = int(imgPx(89, 60) & 0xFF);
+        check("Gradient follows symmetry", std::abs(l - r) <= 2 && l < 100);
+        _cfg.tools.symmetry = 0;
+        _round8 = 0;
+        break;
+      }
     }
   }
 

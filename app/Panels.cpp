@@ -430,8 +430,9 @@ void App::drawColorsWindow() {
     for(int i = 0; i < int(pal.size()); i++) {
       if(i % perRow) ImGui::SameLine();
       ImGui::PushID(i);
-      if(ImGui::ColorButton("##p", toVec(pal[i]), swatch, { cell, cell })) _primary = pal[i];
-      if(ImGui::IsItemClicked(ImGuiMouseButton_Right)) _secondary = pal[i];
+      // Left click sets the color being edited (primary or secondary), right click the other one
+      if(ImGui::ColorButton("##p", toVec(pal[i]), swatch, { cell, cell })) (_editPrimary ? _primary : _secondary) = pal[i];
+      if(ImGui::IsItemClicked(ImGuiMouseButton_Right)) (_editPrimary ? _secondary : _primary) = pal[i];
       ImGui::PopID();
     }
     ImGui::PopStyleVar();

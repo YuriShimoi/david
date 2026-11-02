@@ -6,6 +6,7 @@
 namespace david {
 
 class Document;
+struct StrokeSpace;
 
 // Writes one row of the edit: n pixels from (x0, y), given their values before the edit
 using RowPainter = std::function<void(int x0, int y, int n, const uint32_t* before, uint32_t* out)>;
@@ -14,9 +15,12 @@ using RowPainter = std::function<void(int x0, int y, int n, const uint32_t* befo
 // The selection clips the result.
 void paintRegion(Document& doc, TileRecorder& rec, IRect r, const RowPainter& fn);
 
-// Blends a color through each coverage mask in order (a fill, then its outline)
+// Blends a color through each coverage mask in order (a fill, then its outline). With a space, each mask also
+// lands on its symmetry mirrors.
 struct CoveragePass { const Mask* mask; uint32_t color; };
-void paintCoverage(Document& doc, TileRecorder& rec, std::initializer_list<CoveragePass> passes);
+void paintCoverage(Document& doc, TileRecorder& rec, std::initializer_list<CoveragePass> passes, const StrokeSpace* space = nullptr);
+// The mask plus its mirrors across the space's axes (each pixel keeps its highest coverage)
+std::unique_ptr<Mask> mirrored(const Mask& m, const StrokeSpace& space);
 
 // Straight-alpha mix from a to b by k (0-255), done premultiplied so transparent pixels don't darken edges
 uint32_t mixPixel(uint32_t a, uint32_t b, int k);

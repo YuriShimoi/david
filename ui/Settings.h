@@ -30,6 +30,8 @@ struct Settings {
   ToolSettings tools;
   int checkerSize = 8;
   float gridZoom = 8;       // pixel grid shows above this zoom; 0 = never
+  // Beta tools: features still in development, off by default so a release behaves as before until turned on
+  bool betaVector = false;
   bool wheelZooms = false;  // wheel zooms and Ctrl+wheel scrolls, instead of the Paint.NET way round
   bool floatingWindows = false;  // Paint.NET-style floating tool windows instead of docked ones
   bool colorSquare = false;      // classic square picker instead of the hue wheel

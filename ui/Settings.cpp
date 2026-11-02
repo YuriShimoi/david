@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 
 using json = nlohmann::json;
@@ -52,6 +53,7 @@ static json toJson(const Settings& s) {
     { "loop", a.loop }, { "playTag", a.playTag }, { "previewZoom", a.previewZoom },
   };
   j["shortcuts"] = s.shortcuts;
+  j["beta"] = { { "vector", s.betaVector } };
   j["mods"] = s.mods;
   j["toolStrip"] = { { "order", s.toolOrder }, { "hidden", s.hiddenTools } };
   j["modWindows"] = s.modWindows;
@@ -69,7 +71,14 @@ bool Settings::load(const std::string& path, std::string& error) {
   std::ifstream in(pathFromUtf8(path));
   if(!in) { error = "no settings file"; return false; }
   json j = json::parse(in, nullptr, false);
-  if(j.is_discarded() || !j.is_object()) { error = "bad JSON in " + path; return false; }
+  if(j.is_discarded() || !j.is_object()) {
+    // Kept aside before the defaults get saved over it, so the user's settings can still be recovered
+    in.close();
+    std::error_code ec;
+    std::filesystem::copy_file(pathFromUtf8(path), pathFromUtf8(path + ".bad"), std::filesystem::copy_options::overwrite_existing, ec);
+    error = "bad JSON in " + path + " (kept as settings.json.bad)";
+    return false;
+  }
   read(j, "theme", theme);
   read(j, "systemAccent", systemAccent);
   read(j, "language", language);
@@ -132,6 +141,7 @@ bool Settings::load(const std::string& path, std::string& error) {
     s.onionOpacity = std::clamp(s.onionOpacity, 5, 90); s.loop = std::clamp(s.loop, 0, 2); s.previewZoom = std::clamp(s.previewZoom, 0, 16);
   }
   read(j, "shortcuts", shortcuts);
+  if(auto b = j.find("beta"); b != j.end() && b->is_object()) read(*b, "vector", betaVector);
   read(j, "mods", mods);
   if(auto ts = j.find("toolStrip"); ts != j.end() && ts->is_object()) {
     read(*ts, "order", toolOrder);
@@ -152,10 +162,9 @@ bool Settings::load(const std::string& path, std::string& error) {
 std::string Settings::dump() const { return toJson(*this).dump(2); }
 
 bool Settings::save(const std::string& path, std::string& error) const {
-  std::ofstream out(pathFromUtf8(path));
-  if(!out) { error = "can't write " + path; return false; }
-  out << dump() << '\n';
-  return bool(out);
+  // Atomic, so a crash while saving never leaves a cut file
+  std::string text = dump() + '\n';
+  return writeFileAtomic(path, { text.begin(), text.end() }, error);
 }
 
 }

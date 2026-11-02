@@ -1,6 +1,7 @@
 #include "core/Effect.h"
 #include "core/Composite.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace david {
@@ -63,6 +64,63 @@ void gaussian(Premul& p, double sigma) {
 uint32_t hash(uint32_t x) {
   x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16;
   return x;
+}
+
+// 2D gradient noise (Perlin): hashed unit gradients at the lattice points, quintic fade; about -0.7..0.7
+double perlin(double x, double y, uint32_t seed) {
+  static const auto dirs = [] {
+    std::array<std::pair<double, double>, 256> d{};
+    for(int i = 0; i < 256; i++) d[i] = { std::cos(i * 6.283185307179586 / 256), std::sin(i * 6.283185307179586 / 256) };
+    return d;
+  }();
+  double fx0 = std::floor(x), fy0 = std::floor(y);
+  int x0 = int(fx0), y0 = int(fy0);
+  double fx = x - fx0, fy = y - fy0;
+  auto dot = [&](int ix, int iy, double dx, double dy) {
+    auto& g = dirs[hash(uint32_t(ix) * 73856093u ^ uint32_t(iy) * 19349663u ^ seed) & 255];
+    return g.first * dx + g.second * dy;
+  };
+  auto fade = [](double t) { return t * t * t * (t * (t * 6 - 15) + 10); };
+  double u = fade(fx), v = fade(fy);
+  double a = dot(x0, y0, fx, fy) + (dot(x0 + 1, y0, fx - 1, fy) - dot(x0, y0, fx, fy)) * u;
+  double b = dot(x0, y0 + 1, fx, fy - 1) + (dot(x0 + 1, y0 + 1, fx - 1, fy - 1) - dot(x0, y0 + 1, fx, fy - 1)) * u;
+  return a + (b - a) * v;
+}
+
+// Noise 0-1 (fractal = octaves of Perlin, each twice the frequency and `rough` times the amplitude)
+double noiseAt(double x, double y, uint32_t seed, int octaves, double rough, bool turbulent) {
+  double sum = 0, amp = 1, total = 0, f = 1;
+  for(int o = 0; o < octaves; o++) {
+    double n = perlin(x * f, y * f, seed + uint32_t(o) * 0x632BE5ABu);
+    sum += (turbulent ? std::abs(n) * 2 - 0.7 : n) * amp;
+    total += amp * amp;
+    amp *= rough;
+    f *= 2;
+  }
+  // Octaves are close to independent, so their RMS keeps one octave's contrast
+  return std::clamp(sum / std::sqrt(total) / 1.414 + 0.5, 0.0, 1.0);
+}
+
+// Shared by Perlin and Fractal noise: the noise mixes the primary into the secondary color (or gray) and is
+// painted over the pixels at the given opacity
+void renderNoise(const Image& s, Image& d, const ParamValues& v, const EffectEnv& env, int octaves, double rough, bool turbulent) {
+  double scale = std::max(1.0, v.get("scale", 64));
+  uint32_t seed = uint32_t(v.geti("seed")) * 0x9E3779B9u;
+  bool gray = v.geti("colors") == 1;
+  uint8_t op = uint8_t(std::clamp(std::lround(v.get("opacity", 100) * 2.55), 0L, 255L));
+  uint32_t c0 = gray ? 0xFF000000u : env.primary, c1 = gray ? 0xFFFFFFFFu : env.secondary;
+  parallelRows(s.h, [&](int y0, int y1) {
+    for(int y = y0; y < y1; y++)
+      for(int x = 0; x < s.w; x++) {
+        double n = noiseAt((x + env.originX) / scale, (y + env.originY) / scale, seed, octaves, rough, turbulent);
+        uint32_t c = 0;
+        for(int k = 0; k < 32; k += 8) {
+          double a = (c0 >> k) & 0xFF, b = (c1 >> k) & 0xFF;
+          c |= uint32_t(std::lround(a + (b - a) * n)) << k;
+        }
+        d.at(x, y) = blendOver(s.at(x, y), c, op);
+      }
+  });
 }
 }
 
@@ -127,6 +185,33 @@ void registerFilters() {
           d.at(x, y) = out;
         }
     });
+  };
+  registerEffect(e);
+
+  e = {};
+  e.id = "perlin-noise"; e.name = "Perlin Noise"; e.category = "Effects/Noise";
+  e.params = {
+    { "scale", "Scale", EParam::Float, 2, 1000, 64 },
+    { "colors", "Colors", EParam::Choice, 0, 1, 0, { "Primary to secondary", "Grayscale" } },
+    { "opacity", "Opacity", EParam::Int, 0, 100, 100 },
+    { "seed", "Seed", EParam::Int, 0, 9999, 0 },
+  };
+  e.run = [](const Image& s, Image& d, const ParamValues& v, const EffectEnv& env) { renderNoise(s, d, v, env, 1, 0.5, false); };
+  registerEffect(e);
+
+  e = {};
+  e.id = "fractal-noise"; e.name = "Fractal Noise"; e.category = "Effects/Noise";
+  e.params = {
+    { "scale", "Scale", EParam::Float, 2, 1000, 128 },
+    { "octaves", "Detail", EParam::Int, 1, 10, 6 },
+    { "roughness", "Roughness", EParam::Int, 0, 100, 50 },
+    { "turbulent", "Turbulence", EParam::Bool, 0, 1, 0 },
+    { "colors", "Colors", EParam::Choice, 0, 1, 0, { "Primary to secondary", "Grayscale" } },
+    { "opacity", "Opacity", EParam::Int, 0, 100, 100 },
+    { "seed", "Seed", EParam::Int, 0, 9999, 0 },
+  };
+  e.run = [](const Image& s, Image& d, const ParamValues& v, const EffectEnv& env) {
+    renderNoise(s, d, v, env, std::clamp(v.geti("octaves", 6), 1, 10), v.get("roughness", 50) / 100, v.geti("turbulent") != 0);
   };
   registerEffect(e);
 

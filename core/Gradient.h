@@ -24,6 +24,9 @@ struct GradientSpec {
   bool pixelArt = false;   // only the stop colors, ordered-dithered between neighbors
   Point a{}, b{};
   std::vector<GradStop> stops;  // sorted by pos, at least two
+  // Symmetry: pixels across an axis from the start point take the gradient of their mirror image
+  bool mirrorX = false, mirrorY = false;
+  double axisX = 0, axisY = 0;
 };
 
 // Position 0-1 of image point p along the gradient (repeating types wrap, the others clamp)

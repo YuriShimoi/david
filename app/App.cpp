@@ -277,6 +277,12 @@ void App::setupCommands() {
 
   add({ "edit.undo", N_("Undo"), ICON_FA_ROTATE_LEFT, { CTRL | ImGuiKey_Z }, [this] { _doc->history.undo(*_doc); }, hasUndo, true });
   add({ "edit.redo", N_("Redo"), ICON_FA_ROTATE_RIGHT, { CTRL | ImGuiKey_Y, CTRL | SHIFT | ImGuiKey_Z }, [this] { _doc->history.redo(*_doc); }, hasRedo, true });
+  add({ "edit.cut", N_("Cut"), ICON_FA_SCISSORS, { CTRL | ImGuiKey_X }, [this] { copyImage(false, true); }, hasSel });
+  add({ "edit.copy", N_("Copy"), ICON_FA_COPY, { CTRL | ImGuiKey_C }, [this] { copyImage(false, false); } });
+  add({ "edit.copyMerged", N_("Copy Merged"), ICON_FA_LAYER_GROUP, { CTRL | SHIFT | ImGuiKey_C }, [this] { copyImage(true, false); } });
+  add({ "edit.paste", N_("Paste"), ICON_FA_PASTE, { CTRL | ImGuiKey_V }, [this] { pasteImage(EPaste::Layer); } });
+  add({ "edit.pasteLayer", N_("Paste into New Layer"), ICON_FA_PASTE, { CTRL | SHIFT | ImGuiKey_V }, [this] { pasteImage(EPaste::NewLayer); } });
+  add({ "edit.pasteImage", N_("Paste into New Image"), ICON_FA_PASTE, { CTRL | ALT | ImGuiKey_V }, [this] { pasteImage(EPaste::NewImage); } });
   add({ "edit.selectAll", N_("Select All"), ICON_FA_OBJECT_UNGROUP, { CTRL | ImGuiKey_A }, [this] { selectionOp("all"); } });
   add({ "edit.deselect", N_("Deselect"), ICON_FA_XMARK, { CTRL | ImGuiKey_D }, [this] { selectionOp("none"); }, hasSel });
   add({ "edit.invertSel", N_("Invert Selection"), ICON_FA_CIRCLE_HALF_STROKE, { CTRL | ImGuiKey_I }, [this] { selectionOp("invert"); } });
@@ -634,7 +640,7 @@ void App::frame() {
   if(!_shotPath.empty()) {
     _shotFrames++;
     if(!_selftestDir.empty()) selftestStep(_shotFrames);
-    if(_shotFrames >= (_selftestDir.empty() ? 20 : 320) && !_reloadAt && !_round2 && !_round3 && !_round4 && !_round5 && !_round6 && !_round7) {
+    if(_shotFrames >= (_selftestDir.empty() ? 20 : 320) && !_reloadAt && !_round2 && !_round3 && !_round4 && !_round5 && !_round6 && !_round7 && !_round8) {
       if(!_selftestDir.empty()) {
         std::ofstream out(pathFromUtf8(_selftestDir + "/selftest.txt"));
         out << _selftestLog;
@@ -692,6 +698,8 @@ void App::drawMenu() {
   if(ImGui::BeginMenu(tr("Edit"))) {
     _commands.menuItem("edit.undo");
     _commands.menuItem("edit.redo");
+    ImGui::Separator();
+    for(auto id : { "edit.cut", "edit.copy", "edit.copyMerged", "edit.paste", "edit.pasteLayer", "edit.pasteImage" }) _commands.menuItem(id);
     ImGui::Separator();
     for(auto id : { "edit.selectAll", "edit.deselect", "edit.invertSel" }) _commands.menuItem(id);
     ImGui::Separator();
@@ -836,6 +844,7 @@ void App::drawDialogs() {
   drawSizeDialog();
   drawUnsavedDialog();
   drawResetDialog();
+  drawPasteDialog();
   drawEffectDialog();
   drawCommandDialog();
   drawGridDialog();

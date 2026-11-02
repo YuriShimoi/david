@@ -3,11 +3,28 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.1.0] - Unreleased
+## [1.1.0] - 2026-11-02
+
+### Added
+- Cut (Ctrl+X), Copy (Ctrl+C), Copy Merged (Ctrl+Shift+C), Paste (Ctrl+V), Paste into New Layer (Ctrl+Shift+V) and Paste into New Image (Ctrl+Alt+V) in the Edit menu, through the system clipboard as PNG (with alpha) and BMP. A paste floats on Move Selected Pixels at the top-left of the visible area until Enter or another tool.
+- Pasting an image larger than the canvas asks whether to expand the canvas or keep its size.
+- Perlin Noise and Fractal Noise (detail, roughness, turbulence) in Effects > Noise, from the primary to the secondary color or in grayscale, with opacity and seed.
+- Settings > Beta tools, with a Vector support section (off by default) for the vector features of the next version.
 
 ### Changed
 - Version 1.1.0.
 - The Contour tool (U) is now the Free polygon option of the Shapes tool (A cycles to it): drawn freehand, then it keeps the box handles to move and resize until Enter, with outline, fill or both like the other shapes.
+- Spray moves from N to U.
+- Dither moves from Effects > Color to Effects > Distort.
+- Color window palette: left click sets the color being edited (primary or secondary), right click the other one.
+- The Symmetry button uses the vertical-axis icon, and the Symmetry and Tiled menus open right under their buttons.
+- Settings and theme files are saved atomically (a crash mid-save can't cut them), and an unreadable `settings.json` is kept as `settings.json.bad` before defaults replace it.
+
+### Fixed
+- Line, Curve, Shapes, Text and Gradient follow symmetry.
+
+### Removed
+- The small adjustments icon before the tolerance slider of the Magic Wand and Paint Bucket.
 
 ### Removed
 - The gradient tool's dither select: plain gradients render smooth, and Pixel art mode keeps its Bayer pattern.

@@ -95,8 +95,6 @@ void floodOptionsBar(ToolHost& h, bool& global, bool bucket) {
   ImGui::SameLine();
   toggle(ICON_TB_WORLD, global, N_("Global (Shift)"));
   ImGui::SameLine();
-  ImGui::TextDisabled(ICON_TB_ADJUSTMENTS_HORIZONTAL);
-  ImGui::SameLine();
   ImGui::SetNextItemWidth(120 * h.dpi());
   float pct = s.tolerance * 100;
   if(ImGui::SliderFloat("##tol", &pct, 0, 100, "%.0f%%")) s.tolerance = pct / 100;
@@ -286,7 +284,7 @@ private:
 // Random dots inside the brush circle, more while the button is held (LibreSprite's spray)
 class SprayTool : public Tool {
 public:
-  SprayTool() : Tool(ETool::Spray, ICON_TB_SPRAY, N_("Spray"), ImGuiKey_N) {}
+  SprayTool() : Tool(ETool::Spray, ICON_TB_SPRAY, N_("Spray"), ImGuiKey_U) {}
 
   void down(ToolHost& h, const ToolInput& in) override {
     _stroke = makeStroke(h, EInk::Paint, in, false);

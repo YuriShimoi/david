@@ -84,7 +84,7 @@ Palette paletteFor(const Image& src, const ParamValues& v, const EffectEnv& env)
 
 void registerDither() {
   Effect e;
-  e.id = "dither"; e.name = "Dither"; e.category = "Effects/Color";
+  e.id = "dither"; e.name = "Dither"; e.category = "Effects/Distort";
   e.params = {
     { "palette", "Palette", EParam::Choice, 0, 3, 0, { "Current palette", "Palette file", "From image", "1-bit (primary and secondary)" } },
     { "file", "Palette file", EParam::Text, 0, 0, 0, {}, "", "palette=1" },

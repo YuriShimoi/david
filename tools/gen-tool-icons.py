@@ -39,7 +39,7 @@ ICONS = [
   # Tool options bar (picked on design-samples/david-option-icons)
   ('TB_WAVE_SINE', 'tb', 'wave-sine'),
   ('PH_CHECKERBOARD', 'ph', 'checkerboard'),
-  ('TB_FLIP_VERTICAL', 'tb', 'flip-vertical'),
+  ('TB_FLIP_HORIZONTAL', 'tb', 'flip-horizontal'),
   ('TB_GRID_4X4', 'tb', 'grid-4x4'),
   ('TB_GRID_3X3', 'tb', 'grid-3x3'),
   ('PH_MAGNET', 'ph', 'magnet'),

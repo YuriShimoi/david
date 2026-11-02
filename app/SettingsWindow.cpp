@@ -73,6 +73,7 @@ void App::drawSettings() {
   static const Page pages[] = {
     { ICON_FA_PALETTE, N_("Appearance") }, { ICON_FA_TOOLBOX, N_("Tools") }, { ICON_FA_IMAGE, N_("Canvas") },
     { ICON_FA_KEYBOARD, N_("Shortcuts") }, { ICON_FA_FOLDER_OPEN, N_("Paths") }, { ICON_FA_PUZZLE_PIECE, N_("Mods") },
+    { ICON_FA_FLASK, N_("Beta tools") },
   };
   ImGui::BeginChild("##nav", { 170 * _dpi, 0 });
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { ImGui::GetStyle().ItemSpacing.x, 2 * _dpi });
@@ -103,6 +104,7 @@ void App::drawSettings() {
     case 3: settingsShortcuts(); break;
     case 4: settingsPaths(); break;
     case 5: settingsMods(); break;
+    case 6: settingsBeta(); break;
   }
   ImGui::EndChild();
   ImGui::End();
@@ -469,6 +471,18 @@ void App::settingsCanvas() {
   ImGui::InputInt("##nh", &_cfg.newH, 0);
   _cfg.newW = std::clamp(_cfg.newW, 1, 65535);
   _cfg.newH = std::clamp(_cfg.newH, 1, 65535);
+}
+#pragma endregion
+
+#pragma region [ Beta tools ]
+// Features in development stay off by default, so turning one on is the only way they change David
+void App::settingsBeta() {
+  float col = 190 * _dpi;
+  ImGui::TextDisabled("%s", tr("Features still in development. They may change or be incomplete."));
+  sectionHeader(tr("Vector support"), _boldFont, _theme);
+  rowLabel(tr("Vector layers"), col);
+  ImGui::Checkbox("##vector", &_cfg.betaVector);
+  ImGui::SetItemTooltip("%s", tr("Vector layers, object and node tools, SVG import and export"));
 }
 #pragma endregion
 

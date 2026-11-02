@@ -1,7 +1,9 @@
 #include "core/Paint.h"
 #include "core/Composite.h"
 #include "core/Document.h"
+#include "core/Stroke.h"
 #include <algorithm>
+#include <cmath>
 #include <atomic>
 #include <thread>
 
@@ -70,10 +72,37 @@ void paintRegion(Document& doc, TileRecorder& rec, IRect r, const RowPainter& fn
     if(!job.before && job.tile->isEmpty()) layer.putTile(job.tx, job.ty, nullptr);
 }
 
-void paintCoverage(Document& doc, TileRecorder& rec, std::initializer_list<CoveragePass> passes) {
+std::unique_ptr<Mask> mirrored(const Mask& m, const StrokeSpace& space) {
+  auto out = m.clone();
+  if(!space.mirrorX && !space.mirrorY) return out;
+  IRect b = m.bounds();
+  if(b.empty()) return out;
+  std::vector<uint8_t> row(b.width());
+  auto put = [&](int x, int y, uint8_t c) { if(m.width() > x && x >= 0 && m.height() > y && y >= 0 && out->get(x, y) < c) out->set(x, y, c); };
+  for(int y = b.y0; y <= b.y1; y++) {
+    m.readRow(y, b.x0, b.x1, row.data());
+    // Pixel centers mirror across the axis, as in Stroke
+    int my = int(std::floor(2 * space.axisY - y - 0.5));
+    for(int i = 0; i < b.width(); i++) {
+      uint8_t c = row[i];
+      if(!c) continue;
+      int x = b.x0 + i, mx = int(std::floor(2 * space.axisX - x - 0.5));
+      if(space.mirrorX) put(mx, y, c);
+      if(space.mirrorY) put(x, my, c);
+      if(space.mirrorX && space.mirrorY) put(mx, my, c);
+    }
+  }
+  return out;
+}
+
+void paintCoverage(Document& doc, TileRecorder& rec, std::initializer_list<CoveragePass> passes, const StrokeSpace* space) {
+  std::vector<std::unique_ptr<Mask>> mirrors;
+  std::vector<CoveragePass> list(passes);
+  if(space && (space->mirrorX || space->mirrorY))
+    for(auto& p : list) { mirrors.push_back(mirrored(*p.mask, *space)); p.mask = mirrors.back().get(); }
   IRect r;
   bool any = false;
-  for(auto& p : passes) {
+  for(auto& p : list) {
     IRect b = p.mask->bounds();
     if(b.empty()) continue;
     if(!any) r = b;
@@ -81,7 +110,6 @@ void paintCoverage(Document& doc, TileRecorder& rec, std::initializer_list<Cover
     any = true;
   }
   if(!any) return;
-  std::vector<CoveragePass> list(passes);
   paintRegion(doc, rec, r, [&](int x0, int y, int n, const uint32_t* before, uint32_t* out) {
     thread_local std::vector<uint8_t> cov;
     cov.resize(n);

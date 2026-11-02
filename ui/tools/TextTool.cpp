@@ -1,6 +1,7 @@
 #include "ui/tools/Tool.h"
 #include "core/Document.h"
 #include "core/Paint.h"
+#include "core/Stroke.h"
 #include "core/TextLayout.h"
 #include "platform/Fonts.h"
 #include "platform/Paths.h"
@@ -264,7 +265,8 @@ private:
     Document& doc = h.doc();
     TileRecorder& rec = _edit.redraw(doc);
     _block = layoutText(_text, style(h), _x, _y, doc.width(), doc.height());
-    if(_block.ok) paintCoverage(doc, rec, { { _block.mask.get(), _color } });
+    StrokeSpace sp = strokeSpace(h.settings(), doc);
+    if(_block.ok) paintCoverage(doc, rec, { { _block.mask.get(), _color } }, &sp);
     doc.onChanged();
   }
 

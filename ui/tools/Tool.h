@@ -142,6 +142,8 @@ public:
   virtual ECursor cursor(ToolHost&, const ToolInput&) { return ECursor::Icon; }
   // Pressing the tool's key again: true when the tool moved to its next variant itself (selection shapes)
   virtual bool cycle(ToolHost&) { return false; }
+  // Pasted pixels to float over the active layer at their bounds (Move Selected Pixels); false when unsupported
+  virtual bool paste(ToolHost&, Lifted&&) { return false; }
 };
 
 std::vector<std::unique_ptr<Tool>> createTools();

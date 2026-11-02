@@ -309,12 +309,14 @@ public:
     if(!_session) return;
     Document& doc = h.doc();
     auto step = std::make_unique<CompoundAction>();
-    step->name = name;
+    step->name = _selBefore ? N_("Paste") : name;
     step->icon = icon;
     if(_rec) if(auto edit = _rec->finish("", "")) step->parts.push_back(std::move(edit));
-    if(_hadSelection && !doc.selection->equals(*_base)) {
+    // A paste replaced the selection with its box; the step goes back to the one before
+    const Mask& before = _selBefore ? *_selBefore : *_base;
+    if(_hadSelection && !doc.selection->equals(before)) {
       auto sel = std::make_unique<SelectionEdit>();
-      sel->before = _base->clone();
+      sel->before = before.clone();
       sel->after = doc.selection->clone();
       step->parts.push_back(std::move(sel));
     }
@@ -325,9 +327,32 @@ public:
   void cancel(ToolHost& h) override {
     if(!_session) return;
     if(_rec) _rec->restore();
-    if(_hadSelection) h.doc().selection = _base->clone();
+    if(_hadSelection) h.doc().selection = (_selBefore ? _selBefore : _base)->clone();
     h.doc().onChanged();
     end();
+  }
+
+  bool paste(ToolHost& h, Lifted&& px) override {
+    if(!_pixels) return false;
+    commit(h);
+    Document& doc = h.doc();
+    _selBefore = doc.selection->clone();
+    _hadSelection = true;
+    _bounds = px.bounds;
+    _base = std::make_unique<Mask>(doc.width(), doc.height());
+    for(int y = std::max(0, _bounds.y0); y <= std::min(doc.height() - 1, _bounds.y1); y++) _base->fillSpan(y, _bounds.x0, _bounds.x1, 255);
+    _lifted = std::move(px);
+    Layer& layer = doc.active();
+    _rec = std::make_unique<TileRecorder>(layer);
+    _layerId = layer.id();
+    _xf = {};
+    _xf.cx = (_bounds.x0 + _bounds.x1 + 1) / 2.0;
+    _xf.cy = (_bounds.y0 + _bounds.y1 + 1) / 2.0;
+    // Nothing under the pasted pixels is lifted, so nothing is erased
+    _copy = true;
+    _session = true;
+    apply(h);
+    return true;
   }
 
   bool onKey(ToolHost& h, ImGuiKey k) override {
@@ -387,7 +412,7 @@ public:
 private:
   bool _pixels;
   bool _session = false, _dragging = false, _hadSelection = false, _copy = false;
-  std::unique_ptr<Mask> _base;
+  std::unique_ptr<Mask> _base, _selBefore;  // _selBefore: the selection before a paste
   IRect _bounds;
   Lifted _lifted;
   std::unique_ptr<TileRecorder> _rec;
@@ -509,6 +534,7 @@ private:
     _session = _dragging = _rotating = false;
     _corner = -1;
     _base.reset();
+    _selBefore.reset();
     _rec.reset();
     _lifted = {};
   }

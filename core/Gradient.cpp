@@ -176,7 +176,10 @@ void renderGradient(Document& doc, TileRecorder& rec, const GradientSpec& g) {
   paintRegion(doc, rec, all, [&](int x0, int y, int n, const uint32_t* before, uint32_t* out) {
     for(int i = 0; i < n; i++) {
       int x = x0 + i;
-      float t = gradientPos(g, x + 0.5, y + 0.5);
+      double px = x + 0.5, py = y + 0.5;
+      if(g.mirrorX && (px < g.axisX) != (g.a.x < g.axisX)) px = 2 * g.axisX - px;
+      if(g.mirrorY && (py < g.axisY) != (g.a.y < g.axisY)) py = 2 * g.axisY - py;
+      float t = gradientPos(g, px, py);
       uint32_t c;
       if(g.pixelArt) {
         // Only stop colors: the pixel takes the next stop when its position passes the Bayer threshold
