@@ -1,0 +1,8 @@
+{
+  "name": "QOI-like File Type",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "native",
+  "entry": "qlike",
+  "description": "Opens and saves .qlike files (runs of RGBA pixels) and adds a Swap Red/Blue effect. Built from qoi_like.c."
+}

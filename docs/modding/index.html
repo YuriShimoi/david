@@ -1,0 +1,88 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Getting started · David modding</title><style>
+:root{--bg:#1A1A1A;--surface:#212121;--raised:#2A2A2A;--line:#44475A;--hover:#525568;--text:#FFFFFF;--muted:#A3A3A3;--accent:#8BE9FD;--good:#50FA7B;--warn:#FFB86C;--pink:#FF79C6;--purple:#BD93F9;--yellow:#F1FA8C}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.6 "Segoe UI",system-ui,sans-serif;display:flex}
+nav{width:260px;flex:none;background:var(--surface);height:100vh;position:sticky;top:0;overflow:auto;padding:20px 14px}
+nav .brand{font-weight:700;font-size:17px;margin:0 6px 14px;display:flex;gap:8px;align-items:center}
+nav .brand span{color:var(--accent)} nav .brand a.lang{margin-left:auto;font-size:12px;font-weight:400;padding:2px 8px;color:var(--muted)}
+nav input{width:100%;background:var(--raised);border:0;border-radius:6px;color:var(--text);padding:8px 10px;font:inherit;margin-bottom:14px}
+nav input:focus{outline:2px solid var(--accent)}
+nav .head{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 6px 6px}
+nav a{display:block;color:var(--text);text-decoration:none;padding:5px 8px;border-radius:6px}
+nav a:hover{background:var(--line)} nav a.on{color:var(--accent);background:var(--raised)}
+nav .toc a{font-size:13px;color:var(--muted);padding:2px 8px 2px 18px} nav .toc a.l3{padding-left:30px}
+#results a{font-size:14px} #results .where{display:block;color:var(--muted);font-size:12px}
+main{flex:1;min-width:0;padding:32px 48px 80px}
+article{max-width:820px}
+h1{font-size:28px;margin:0 0 16px} h2{font-size:20px;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)} h3{font-size:16px;margin:24px 0 8px}
+a{color:var(--accent)} p,ul,table,pre,figure{margin:0 0 16px}
+code{font-family:Consolas,"Cascadia Mono",monospace;font-size:13px;background:var(--raised);border-radius:4px;padding:1px 5px}
+pre{background:var(--surface);border-radius:8px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:13px;line-height:1.5}
+pre.sig{border-left:3px solid var(--accent)}
+table{border-collapse:collapse;width:100%} th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+figure{background:var(--surface);border-radius:8px;padding:10px} figure img{max-width:100%;border-radius:4px;display:block} figcaption{color:var(--muted);font-size:13px;margin-top:6px}
+section.api{background:var(--surface);border-radius:8px;padding:4px 16px 2px;margin:0 0 12px} section.api h3{margin-top:12px}
+.muted{color:var(--muted)} .kw{color:var(--pink)} .str{color:var(--yellow)} .com{color:#6272A4} .num{color:var(--purple)}
+@media(max-width:800px){body{display:block}nav{width:auto;height:auto;position:static}main{padding:20px}}
+</style></head><body>
+<nav><div class="brand">David <span>modding</span><a class="lang" href="pt-BR/index.html">PT</a></div><input id="search" placeholder="Search the guide" autocomplete="off"><div id="results"></div>
+<div class="head">Start</div><a href="index.html" class="on">Getting started</a><a href="tutorial-shader.html">Shader effect</a><a href="tutorial-lua-command.html">Lua command</a><a href="tutorial-lua-tool.html">Lua tool</a><a href="tutorial-lua-window.html">Lua windows</a><div class="head">Reference</div><a href="tutorial-native.html">Native plugin</a><a href="concepts.html">Concepts</a><a href="cookbook.html">Cookbook</a><a href="reference.html">API reference</a><a href="effects.html">Built-in effects</a><a href="formats.html">Patterns, themes, files</a><a href="versioning.html">Versioning</a><div id="toc"><div class="head">On this page</div><div class="toc"><a class="l2" href="#where-mods-live">Where mods live</a><a class="l2" href="#mod-json">mod.json</a><a class="l2" href="#turning-mods-on-and-seeing-errors">Turning mods on and seeing errors</a><a class="l2" href="#the-edit-loop">The edit loop</a><a class="l2" href="#next">Next</a></div></div></nav>
+<main><article><h1 id="getting-started">Getting started</h1>
+<p>David has three kinds of mods. Pick the simplest one that can do the job:</p>
+<table><thead><tr><th>Tier</th><th>What it is</th><th>Good for</th></tr></thead><tbody><tr><td>Shader</td><td>One <code>.glsl</code> file</td><td>Per-pixel effects that run on the GPU: color changes, patterns, distortions</td></tr><tr><td>Lua</td><td>One or more <code>.lua</code> files</td><td>Effects, commands that edit layers, painting tools</td></tr><tr><td>Native</td><td>A DLL or <code>.so</code> built from C or C++</td><td>Heavy effects and new file formats</td></tr></tbody></table>
+<h2 id="where-mods-live">Where mods live</h2>
+<p>Every mod is a folder with a <code>mod.json</code> inside. David looks in two places:</p>
+<ul><li>the <code>mods</code> folder next to the program (mods that ship with David, and <code>mods/examples/</code>);</li><li>the <code>mods</code> folder in your config folder: <code>%APPDATA%\David\mods</code> on Windows, <code>~/.config/david/mods</code> on Linux. <strong>Mods &gt; Open mods folder</strong> opens it.</li></ul>
+<p>A mod in your config folder replaces a bundled mod with the same folder name.</p>
+<h2 id="mod-json">mod.json</h2>
+<pre class="lang-json"><code>{
+  "name": "Scanlines",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "shader",
+  "entry": "scanlines.glsl",
+  "description": "Darkens every other group of rows."
+}</code></pre>
+<table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody><tr><td><code>name</code></td><td>Shown in Settings &gt; Mods.</td></tr><tr><td><code>version</code></td><td>Your mod's version, any text.</td></tr><tr><td><code>api</code></td><td>The David API version the mod needs. This David has version 1; a higher number refuses to load.</td></tr><tr><td><code>kind</code></td><td><code>shader</code>, <code>lua</code> or <code>native</code>.</td></tr><tr><td><code>entry</code></td><td>The file David loads: the <code>.glsl</code> file, the main <code>.lua</code> file, or the library name without its extension (<code>qlike</code> loads <code>qlike.dll</code> or <code>qlike.so</code> / <code>libqlike.so</code>).</td></tr><tr><td><code>description</code></td><td>One line, shown under the name.</td></tr><tr><td><code>permissions</code></td><td>Optional list, shown to the user. Version 1 grants nothing extra: Lua mods can't reach files or the network either way.</td></tr></tbody></table>
+<h2 id="turning-mods-on-and-seeing-errors">Turning mods on and seeing errors</h2>
+<p><strong>Settings &gt; Mods</strong> (or <strong>Mods &gt; Manage mods</strong>) lists every mod with a switch. Your own mods start on; the examples start off. A mod that fails to load shows its error in red under its name: a JSON mistake, a Lua syntax error with its line, or a GLSL compile error. What <code>david.log</code> and <code>print</code> write shows under <strong>Log</strong>.</p>
+<figure><img src="img/mods.png" alt="Settings &gt; Mods with the example mods and a broken one"><figcaption>Settings &gt; Mods with the example mods and a broken one</figcaption></figure>
+<h2 id="the-edit-loop">The edit loop</h2>
+<p>Shader and Lua mods reload by themselves: keep David open, save your file, and within a second the new version is in the menus. If an effect's dialog is open, the reload waits until you close it. Native mods and new Lua tools need a restart.</p>
+<p>The same mods run from the command line, which is handy for quick checks:</p>
+<pre class="lang-text"><code>david-cli --mod scanlines in.png --effect scanlines:spacing=4 -o out.png
+david-cli --list-effects</code></pre>
+<h2 id="next">Next</h2>
+<ul><li><a href="tutorial-shader.html">Shader effect: Scanlines</a></li><li><a href="tutorial-lua-command.html">Lua command: Palette Swap</a></li><li><a href="tutorial-lua-tool.html">Lua tool: Checker Brush</a></li><li><a href="tutorial-lua-window.html">Lua windows: Canvas Info</a></li><li><a href="tutorial-native.html">Native plugin: a QOI-like file type</a></li><li><a href="reference.html">API reference</a></li></ul></article></main><script src="search-index.js"></script><script>
+(function(){
+  var box = document.getElementById('search'), res = document.getElementById('results'), toc = document.getElementById('toc');
+  box.addEventListener('input', function(){
+    var q = box.value.trim().toLowerCase();
+    if(!q){ res.innerHTML = ''; toc.style.display = ''; return; }
+    toc.style.display = 'none';
+    var words = q.split(/\s+/), hits = [];
+    DAVID_INDEX.forEach(function(e){
+      var t = (e.title + ' ' + e.text).toLowerCase(), score = 0;
+      for(var i = 0; i < words.length; i++){ if(t.indexOf(words[i]) < 0) return; score += e.title.toLowerCase().indexOf(words[i]) >= 0 ? 3 : 1; }
+      hits.push([score, e]);
+    });
+    hits.sort(function(a, b){ return b[0] - a[0]; });
+    res.innerHTML = hits.slice(0, 30).map(function(h){
+      var e = h[1];
+      return '<a href="' + e.url + '">' + e.title.replace(/</g, '&lt;') + '<span class="where">' + e.page + '</span></a>';
+    }).join('') || '<div class="muted" style="padding:6px 8px">Nothing found</div>';
+  });
+  var kw = /\b(local|function|end|if|then|else|elseif|for|do|while|return|nil|true|false|and|or|not|in|vec2|vec3|vec4|float|int|bool|uniform|static|const|struct|typedef|void|uint32_t|uint8_t|size_t|return|include|define)\b/g;
+  document.querySelectorAll('pre:not(.lang-json):not(.lang-text) code').forEach(function(c){
+    var h = c.innerHTML;
+    h = h.replace(/(--[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, '\u0001$1\u0002');
+    h = h.split(/(\u0001[^\u0002]*\u0002)/).map(function(s){
+      if(s.charAt(0) === '\u0001') return '<span class="com">' + s.slice(1, -1) + '</span>';
+      return s.replace(/(&quot;[^&]*&quot;|"[^"\n]*")/g, '<span class="str">$1</span>').replace(kw, '<span class="kw">$1</span>');
+    }).join('');
+    c.innerHTML = h;
+  });
+})();
+</script></body></html>

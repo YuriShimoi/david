@@ -1,0 +1,44 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    },
+    {
+      "name": "win",
+      "hidden": true,
+      "inherits": "base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/build/vcpkg_installed",
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      }
+    },
+    {
+      "name": "linux",
+      "hidden": true,
+      "inherits": "base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-linux",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/build/vcpkg_installed-linux"
+      }
+    },
+    { "name": "win-debug",     "inherits": "win",   "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "win-release",   "inherits": "win",   "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
+    { "name": "linux-debug",   "inherits": "linux", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "linux-release", "inherits": "linux", "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } }
+  ],
+  "buildPresets": [
+    { "name": "win-debug",     "configurePreset": "win-debug" },
+    { "name": "win-release",   "configurePreset": "win-release" },
+    { "name": "linux-debug",   "configurePreset": "linux-debug" },
+    { "name": "linux-release", "configurePreset": "linux-release" }
+  ]
+}

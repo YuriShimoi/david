@@ -1,0 +1,130 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lua windows · David modding</title><style>
+:root{--bg:#1A1A1A;--surface:#212121;--raised:#2A2A2A;--line:#44475A;--hover:#525568;--text:#FFFFFF;--muted:#A3A3A3;--accent:#8BE9FD;--good:#50FA7B;--warn:#FFB86C;--pink:#FF79C6;--purple:#BD93F9;--yellow:#F1FA8C}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.6 "Segoe UI",system-ui,sans-serif;display:flex}
+nav{width:260px;flex:none;background:var(--surface);height:100vh;position:sticky;top:0;overflow:auto;padding:20px 14px}
+nav .brand{font-weight:700;font-size:17px;margin:0 6px 14px;display:flex;gap:8px;align-items:center}
+nav .brand span{color:var(--accent)} nav .brand a.lang{margin-left:auto;font-size:12px;font-weight:400;padding:2px 8px;color:var(--muted)}
+nav input{width:100%;background:var(--raised);border:0;border-radius:6px;color:var(--text);padding:8px 10px;font:inherit;margin-bottom:14px}
+nav input:focus{outline:2px solid var(--accent)}
+nav .head{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 6px 6px}
+nav a{display:block;color:var(--text);text-decoration:none;padding:5px 8px;border-radius:6px}
+nav a:hover{background:var(--line)} nav a.on{color:var(--accent);background:var(--raised)}
+nav .toc a{font-size:13px;color:var(--muted);padding:2px 8px 2px 18px} nav .toc a.l3{padding-left:30px}
+#results a{font-size:14px} #results .where{display:block;color:var(--muted);font-size:12px}
+main{flex:1;min-width:0;padding:32px 48px 80px}
+article{max-width:820px}
+h1{font-size:28px;margin:0 0 16px} h2{font-size:20px;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)} h3{font-size:16px;margin:24px 0 8px}
+a{color:var(--accent)} p,ul,table,pre,figure{margin:0 0 16px}
+code{font-family:Consolas,"Cascadia Mono",monospace;font-size:13px;background:var(--raised);border-radius:4px;padding:1px 5px}
+pre{background:var(--surface);border-radius:8px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:13px;line-height:1.5}
+pre.sig{border-left:3px solid var(--accent)}
+table{border-collapse:collapse;width:100%} th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+figure{background:var(--surface);border-radius:8px;padding:10px} figure img{max-width:100%;border-radius:4px;display:block} figcaption{color:var(--muted);font-size:13px;margin-top:6px}
+section.api{background:var(--surface);border-radius:8px;padding:4px 16px 2px;margin:0 0 12px} section.api h3{margin-top:12px}
+.muted{color:var(--muted)} .kw{color:var(--pink)} .str{color:var(--yellow)} .com{color:#6272A4} .num{color:var(--purple)}
+@media(max-width:800px){body{display:block}nav{width:auto;height:auto;position:static}main{padding:20px}}
+</style></head><body>
+<nav><div class="brand">David <span>modding</span><a class="lang" href="pt-BR/tutorial-lua-window.html">PT</a></div><input id="search" placeholder="Search the guide" autocomplete="off"><div id="results"></div>
+<div class="head">Start</div><a href="index.html">Getting started</a><a href="tutorial-shader.html">Shader effect</a><a href="tutorial-lua-command.html">Lua command</a><a href="tutorial-lua-tool.html">Lua tool</a><a href="tutorial-lua-window.html" class="on">Lua windows</a><div class="head">Reference</div><a href="tutorial-native.html">Native plugin</a><a href="concepts.html">Concepts</a><a href="cookbook.html">Cookbook</a><a href="reference.html">API reference</a><a href="effects.html">Built-in effects</a><a href="formats.html">Patterns, themes, files</a><a href="versioning.html">Versioning</a><div id="toc"><div class="head">On this page</div><div class="toc"><a class="l2" href="#two-kinds-of-window">Two kinds of window</a><a class="l2" href="#the-tool-window">The tool window</a><a class="l2" href="#the-dialog">The dialog</a><a class="l2" href="#undo">Undo</a><a class="l2" href="#when-it-goes-wrong">When it goes wrong</a><a class="l2" href="#widgets">Widgets</a></div></div></nav>
+<main><article><h1 id="tutorial-canvas-info-lua-windows">Tutorial: Canvas Info (Lua windows)</h1>
+<p>A tool window that docks next to Layers and shows the image's size, layers and frames, plus a dialog it opens to rename the layers. The finished mod is <code>mods/examples/canvas-info</code>.</p>
+<h2 id="two-kinds-of-window">Two kinds of window</h2>
+<ul><li><strong>Tool window</strong> (<code>kind = "tool"</code>, the default): docks like Colors, Layers and History. It first opens as a tab next to Layers; drag its tab to dock it anywhere else. With Settings &gt; Appearance &gt; floating windows on, it floats like the other windows.</li><li><strong>Dialog</strong> (<code>kind = "dialog"</code>): floats over the canvas like Settings and never docks. Esc closes it.</li></ul>
+<p>Both are listed in the Mods menu (checked while open), and David remembers which ones were open for the next session.</p>
+<h2 id="the-tool-window">The tool window</h2>
+<p><code>mod.json</code> is the same as in the <a href="tutorial-lua-command.html">command tutorial</a>, with <code>"entry": "main.lua"</code>. Then:</p>
+<pre class="lang-lua"><code>local count = 0
+
+david.window{
+  id = "canvas-info",
+  title = "Canvas Info",
+  draw = function(ui, doc)
+    ui:header("Image")
+    ui:text(doc.width .. " x " .. doc.height .. " px")
+    ui:text(doc:layerCount() .. " layers, " .. doc:frameCount() .. " frames")
+
+    ui:header("Active layer")
+    local layer = doc:layer()
+    ui:text(layer.name)
+    if ui:button("Count opaque pixels", -1) then
+      count = 0
+      for y = 0, doc.height - 1 do
+        for x = 0, doc.width - 1 do
+          local _, _, _, a = david.channels(layer:get(x, y))
+          if a &gt; 0 then count = count + 1 end
+        end
+      end
+    end
+    ui:muted(count .. " opaque pixels at the last count")
+
+    if ui:button("Rename Layers...", -1) then david.openWindow("rename") end
+  end,
+}</code></pre>
+<p><code>draw(ui, doc)</code> runs <strong>every frame</strong> while the window is open (immediate mode): it rebuilds the contents each time from the document and the mod's own variables. Keep it light; do heavy work only when a button is pressed, as the pixel count does here.</p>
+<p>Widgets are laid out top to bottom. A button returns <code>true</code> on the frame it was clicked; <code>-1</code> as its width fills the row.</p>
+<h2 id="the-dialog">The dialog</h2>
+<pre class="lang-lua"><code>local prefix, numbered, start = "Layer", true, 1
+
+david.window{
+  id = "rename",
+  title = "Rename Layers",
+  kind = "dialog",
+  width = 360,
+  height = 200,
+  draw = function(ui, doc)
+    prefix = ui:input("Prefix", prefix)
+    numbered = ui:checkbox("Number them", numbered)
+    if numbered then start = ui:slider("Start at", start, 0, 100) end
+    ui:separator()
+    if ui:button("Apply", 100) then
+      for i = 1, doc:layerCount() do
+        doc:layer(i).name = numbered and (prefix .. " " .. (start + i - 1)) or prefix
+      end
+      ui:close()
+    end
+    ui:sameLine()
+    if ui:button("Cancel", 100) then ui:close() end
+  end,
+}</code></pre>
+<p>Value widgets take the current value and return the new one (plus <code>true</code> as a second result when it changed), so the pattern is always <code>value = ui:widget("Label", value)</code>. Their labels sit on the left, like the effect dialogs; the slider is the same bar with a number field.</p>
+<p><code>width</code> and <code>height</code> are the size the window first opens at; after that David keeps the size the user gave it.</p>
+<h2 id="undo">Undo</h2>
+<p>Everything a <code>draw</code> call changes in the document is <strong>one undo step</strong>, named after the window (here "Rename Layers"). So change the document on a button press, not while a slider moves, or every frame of the drag becomes its own step.</p>
+<h2 id="when-it-goes-wrong">When it goes wrong</h2>
+<p>If <code>draw</code> raises an error, the window shows the error instead of its contents and the error goes to the mod's log (Settings &gt; Mods). Fix the file and save it: the mod reloads and the window draws again.</p>
+<h2 id="widgets">Widgets</h2>
+<table><thead><tr><th>Call</th><th>Returns</th></tr></thead><tbody><tr><td><code>ui:text(s)</code>, <code>ui:muted(s)</code>, <code>ui:header(s)</code></td><td></td></tr><tr><td><code>ui:separator()</code>, <code>ui:spacing()</code>, <code>ui:sameLine()</code></td><td></td></tr><tr><td><code>ui:button(label [, width])</code></td><td>pressed</td></tr><tr><td><code>ui:checkbox(label, value)</code></td><td>value, changed</td></tr><tr><td><code>ui:slider(label, value, min, max [, step])</code></td><td>value, changed</td></tr><tr><td><code>ui:choice(label, index, { names })</code></td><td>index (from 1), changed</td></tr><tr><td><code>ui:color(label, color)</code></td><td>color, changed</td></tr><tr><td><code>ui:input(label, text)</code></td><td>text, changed</td></tr><tr><td><code>ui:width()</code></td><td>the width left on the row</td></tr><tr><td><code>ui:close()</code></td><td></td></tr></tbody></table>
+<p>Two widgets with the same label are fine; text after <code>##</code> in a label is not shown. The <a href="reference.html#lua-ui">API reference</a> has the details.</p></article></main><script src="search-index.js"></script><script>
+(function(){
+  var box = document.getElementById('search'), res = document.getElementById('results'), toc = document.getElementById('toc');
+  box.addEventListener('input', function(){
+    var q = box.value.trim().toLowerCase();
+    if(!q){ res.innerHTML = ''; toc.style.display = ''; return; }
+    toc.style.display = 'none';
+    var words = q.split(/\s+/), hits = [];
+    DAVID_INDEX.forEach(function(e){
+      var t = (e.title + ' ' + e.text).toLowerCase(), score = 0;
+      for(var i = 0; i < words.length; i++){ if(t.indexOf(words[i]) < 0) return; score += e.title.toLowerCase().indexOf(words[i]) >= 0 ? 3 : 1; }
+      hits.push([score, e]);
+    });
+    hits.sort(function(a, b){ return b[0] - a[0]; });
+    res.innerHTML = hits.slice(0, 30).map(function(h){
+      var e = h[1];
+      return '<a href="' + e.url + '">' + e.title.replace(/</g, '&lt;') + '<span class="where">' + e.page + '</span></a>';
+    }).join('') || '<div class="muted" style="padding:6px 8px">Nothing found</div>';
+  });
+  var kw = /\b(local|function|end|if|then|else|elseif|for|do|while|return|nil|true|false|and|or|not|in|vec2|vec3|vec4|float|int|bool|uniform|static|const|struct|typedef|void|uint32_t|uint8_t|size_t|return|include|define)\b/g;
+  document.querySelectorAll('pre:not(.lang-json):not(.lang-text) code').forEach(function(c){
+    var h = c.innerHTML;
+    h = h.replace(/(--[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, '\u0001$1\u0002');
+    h = h.split(/(\u0001[^\u0002]*\u0002)/).map(function(s){
+      if(s.charAt(0) === '\u0001') return '<span class="com">' + s.slice(1, -1) + '</span>';
+      return s.replace(/(&quot;[^&]*&quot;|"[^"\n]*")/g, '<span class="str">$1</span>').replace(kw, '<span class="kw">$1</span>');
+    }).join('');
+    c.innerHTML = h;
+  });
+})();
+</script></body></html>

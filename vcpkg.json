@@ -1,0 +1,54 @@
+{
+  "name": "david",
+  "version-string": "1.0.0",
+  "builtin-baseline": "9a5dfef5d1a0438a7d24856a85bd60f309d355e9",
+  "dependencies": [
+    "sdl3",
+    {
+      "name": "imgui",
+      "features": [
+        "docking-experimental",
+        "sdl3-binding",
+        "opengl3-binding"
+      ]
+    },
+    {
+      "name": "glad",
+      "features": [
+        "gl-api-33"
+      ]
+    },
+    "libpng",
+    "zlib",
+    "glm",
+    "nlohmann-json",
+    {
+      "name": "freetype",
+      "default-features": false,
+      "features": [
+        "zlib",
+        "png"
+      ]
+    },
+    {
+      "name": "harfbuzz",
+      "default-features": false,
+      "features": [
+        "freetype"
+      ]
+    },
+    {
+      "name": "fontconfig",
+      "platform": "linux"
+    },
+    "lua",
+    "sol2",
+    "cli11",
+    "stb",
+    {
+      "name": "libwebp",
+      "default-features": false,
+      "features": [ "mux" ]
+    }
+  ]
+}

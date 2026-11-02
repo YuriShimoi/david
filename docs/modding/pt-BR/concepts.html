@@ -1,0 +1,77 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conceitos · Mods do David</title><style>
+:root{--bg:#1A1A1A;--surface:#212121;--raised:#2A2A2A;--line:#44475A;--hover:#525568;--text:#FFFFFF;--muted:#A3A3A3;--accent:#8BE9FD;--good:#50FA7B;--warn:#FFB86C;--pink:#FF79C6;--purple:#BD93F9;--yellow:#F1FA8C}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.6 "Segoe UI",system-ui,sans-serif;display:flex}
+nav{width:260px;flex:none;background:var(--surface);height:100vh;position:sticky;top:0;overflow:auto;padding:20px 14px}
+nav .brand{font-weight:700;font-size:17px;margin:0 6px 14px;display:flex;gap:8px;align-items:center}
+nav .brand span{color:var(--accent)} nav .brand a.lang{margin-left:auto;font-size:12px;font-weight:400;padding:2px 8px;color:var(--muted)}
+nav input{width:100%;background:var(--raised);border:0;border-radius:6px;color:var(--text);padding:8px 10px;font:inherit;margin-bottom:14px}
+nav input:focus{outline:2px solid var(--accent)}
+nav .head{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 6px 6px}
+nav a{display:block;color:var(--text);text-decoration:none;padding:5px 8px;border-radius:6px}
+nav a:hover{background:var(--line)} nav a.on{color:var(--accent);background:var(--raised)}
+nav .toc a{font-size:13px;color:var(--muted);padding:2px 8px 2px 18px} nav .toc a.l3{padding-left:30px}
+#results a{font-size:14px} #results .where{display:block;color:var(--muted);font-size:12px}
+main{flex:1;min-width:0;padding:32px 48px 80px}
+article{max-width:820px}
+h1{font-size:28px;margin:0 0 16px} h2{font-size:20px;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)} h3{font-size:16px;margin:24px 0 8px}
+a{color:var(--accent)} p,ul,table,pre,figure{margin:0 0 16px}
+code{font-family:Consolas,"Cascadia Mono",monospace;font-size:13px;background:var(--raised);border-radius:4px;padding:1px 5px}
+pre{background:var(--surface);border-radius:8px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:13px;line-height:1.5}
+pre.sig{border-left:3px solid var(--accent)}
+table{border-collapse:collapse;width:100%} th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+figure{background:var(--surface);border-radius:8px;padding:10px} figure img{max-width:100%;border-radius:4px;display:block} figcaption{color:var(--muted);font-size:13px;margin-top:6px}
+section.api{background:var(--surface);border-radius:8px;padding:4px 16px 2px;margin:0 0 12px} section.api h3{margin-top:12px}
+.muted{color:var(--muted)} .kw{color:var(--pink)} .str{color:var(--yellow)} .com{color:#6272A4} .num{color:var(--purple)}
+@media(max-width:800px){body{display:block}nav{width:auto;height:auto;position:static}main{padding:20px}}
+</style></head><body>
+<nav><div class="brand">David <span>mods</span><a class="lang" href="../concepts.html">EN</a></div><input id="search" placeholder="Buscar no guia" autocomplete="off"><div id="results"></div>
+<div class="head">Início</div><a href="index.html">Primeiros passos</a><a href="tutorial-shader.html">Efeito de shader</a><a href="tutorial-lua-command.html">Comando Lua</a><a href="tutorial-lua-tool.html">Ferramenta Lua</a><a href="tutorial-lua-window.html">Janelas Lua</a><div class="head">Referência</div><a href="tutorial-native.html">Plugin nativo</a><a href="concepts.html" class="on">Conceitos</a><a href="cookbook.html">Receitas</a><a href="reference.html">Referência da API</a><a href="effects.html">Efeitos embutidos</a><a href="formats.html">Padrões, temas, arquivos</a><a href="versioning.html">Versionamento</a><div id="toc"><div class="head">Nesta página</div><div class="toc"><a class="l2" href="#pixels-e-coordenadas">Pixels e coordenadas</a><a class="l2" href="#tiles">Tiles</a><a class="l2" href="#a-sele-o">A seleção</a><a class="l2" href="#transa-es-de-desfazer">Transações de desfazer</a><a class="l2" href="#espa-os-de-cor">Espaços de cor</a><a class="l2" href="#o-sandbox">O sandbox</a></div></div></nav>
+<main><article><h1 id="conceitos">Conceitos</h1>
+<h2 id="pixels-e-coordenadas">Pixels e coordenadas</h2>
+<ul><li>As coordenadas são pixels da imagem a partir do canto superior esquerdo, começando em 0. <code>x</code> cresce para a direita, <code>y</code> para baixo.</li><li>Uma cor é um inteiro de 32 bits: RGBA direto (não pré-multiplicado), com o vermelho no byte baixo. No Lua, use <code>david.rgba</code> e <code>david.channels</code> em vez de fazer a conta de bits.</li><li>As camadas são numeradas a partir de 1 (a camada de baixo) no Lua, como é de costume no Lua.</li></ul>
+<h2 id="tiles">Tiles</h2>
+<p>Uma imagem é armazenada em tiles de 256 × 256 pixels, e um tile vazio não ocupa memória. Por isso uma camada nova de 8000 × 8000 não custa nada até você pintar nela. Para os mods isso é invisível: <code>get</code> e <code>set</code> funcionam em qualquer lugar da imagem.</p>
+<h2 id="a-sele-o">A seleção</h2>
+<p>A seleção é uma máscara com um valor de 0 a 255 por pixel, não uma forma: bordas suaves (da varinha mágica ou de um laço com suavização) são pixels parcialmente selecionados.</p>
+<ul><li>Os efeitos só alteram os pixels dentro da seleção, misturados pela máscara: um pixel selecionado em 128 recebe metade do efeito. Você não precisa fazer nada para isso.</li><li>A imagem de um efeito é a caixa delimitadora da seleção mais a margem do efeito. Fora da caixa delimitadora nada muda.</li><li>Os comandos enxergam a máscara por <code>doc:selected(x, y)</code> e <code>doc:selectionBounds()</code>.</li></ul>
+<h2 id="transa-es-de-desfazer">Transações de desfazer</h2>
+<p>Cada execução de efeito, de comando ou traço de ferramenta é uma etapa do Histórico. O David registra os tiles que uma etapa toca (antes e depois), então a memória de desfazer continua pequena mesmo em imagens grandes. Dentro de um comando Lua, toda alteração entra na mesma etapa, em ordem, e um erro de Lua desfaz tudo o que o comando fez.</p>
+<h2 id="espa-os-de-cor">Espaços de cor</h2>
+<p>As cores são sRGB de 8 bits. Algumas operações funcionam em outros espaços:</p>
+<ul><li><strong>Luz linear</strong> para reamostragem (Imagem &gt; Redimensionar imagem, com a opção de gama ativada).</li><li><strong>OKLab</strong>, um espaço perceptual, para a tolerância da varinha mágica e do balde de tinta, gradientes, correspondência de paleta em Pontilhado e Matiz / saturação. Os mods podem fazer as próprias conversões; as fórmulas estão no <a href="https://bottosson.github.io/posts/oklab/">artigo sobre OKLab de Björn Ottosson</a>.</li></ul>
+<h2 id="o-sandbox">O sandbox</h2>
+<p>Os mods Lua rodam apenas com <code>math</code>, <code>string</code>, <code>table</code>, <code>utf8</code> e as partes seguras da biblioteca base. Não há <code>os</code>, <code>io</code>, <code>package</code>, <code>require</code>, <code>load</code>, <code>loadfile</code> nem <code>dofile</code>, e bytecode compilado não pode ser carregado. Um mod Lua só pode alterar a imagem que recebe. Cada chamada tem um limite de 10 segundos.</p>
+<p>Os mods de shader só enxergam a área em que rodam. Os plugins nativos não têm sandbox (veja o <a href="tutorial-native.html">tutorial nativo</a>).</p></article></main><script src="search-index.js"></script><script>
+(function(){
+  var box = document.getElementById('search'), res = document.getElementById('results'), toc = document.getElementById('toc');
+  box.addEventListener('input', function(){
+    var q = box.value.trim().toLowerCase();
+    if(!q){ res.innerHTML = ''; toc.style.display = ''; return; }
+    toc.style.display = 'none';
+    var words = q.split(/\s+/), hits = [];
+    DAVID_INDEX.forEach(function(e){
+      var t = (e.title + ' ' + e.text).toLowerCase(), score = 0;
+      for(var i = 0; i < words.length; i++){ if(t.indexOf(words[i]) < 0) return; score += e.title.toLowerCase().indexOf(words[i]) >= 0 ? 3 : 1; }
+      hits.push([score, e]);
+    });
+    hits.sort(function(a, b){ return b[0] - a[0]; });
+    res.innerHTML = hits.slice(0, 30).map(function(h){
+      var e = h[1];
+      return '<a href="' + e.url + '">' + e.title.replace(/</g, '&lt;') + '<span class="where">' + e.page + '</span></a>';
+    }).join('') || '<div class="muted" style="padding:6px 8px">Nada encontrado</div>';
+  });
+  var kw = /\b(local|function|end|if|then|else|elseif|for|do|while|return|nil|true|false|and|or|not|in|vec2|vec3|vec4|float|int|bool|uniform|static|const|struct|typedef|void|uint32_t|uint8_t|size_t|return|include|define)\b/g;
+  document.querySelectorAll('pre:not(.lang-json):not(.lang-text) code').forEach(function(c){
+    var h = c.innerHTML;
+    h = h.replace(/(--[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, '\u0001$1\u0002');
+    h = h.split(/(\u0001[^\u0002]*\u0002)/).map(function(s){
+      if(s.charAt(0) === '\u0001') return '<span class="com">' + s.slice(1, -1) + '</span>';
+      return s.replace(/(&quot;[^&]*&quot;|"[^"\n]*")/g, '<span class="str">$1</span>').replace(kw, '<span class="kw">$1</span>');
+    }).join('');
+    c.innerHTML = h;
+  });
+})();
+</script></body></html>

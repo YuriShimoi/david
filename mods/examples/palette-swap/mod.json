@@ -1,0 +1,8 @@
+{
+  "name": "Palette Swap",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "lua",
+  "entry": "main.lua",
+  "description": "Replaces one color with another in the active layer, inside the selection."
+}

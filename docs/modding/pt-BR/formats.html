@@ -1,0 +1,85 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Padrões, temas, arquivos · Mods do David</title><style>
+:root{--bg:#1A1A1A;--surface:#212121;--raised:#2A2A2A;--line:#44475A;--hover:#525568;--text:#FFFFFF;--muted:#A3A3A3;--accent:#8BE9FD;--good:#50FA7B;--warn:#FFB86C;--pink:#FF79C6;--purple:#BD93F9;--yellow:#F1FA8C}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.6 "Segoe UI",system-ui,sans-serif;display:flex}
+nav{width:260px;flex:none;background:var(--surface);height:100vh;position:sticky;top:0;overflow:auto;padding:20px 14px}
+nav .brand{font-weight:700;font-size:17px;margin:0 6px 14px;display:flex;gap:8px;align-items:center}
+nav .brand span{color:var(--accent)} nav .brand a.lang{margin-left:auto;font-size:12px;font-weight:400;padding:2px 8px;color:var(--muted)}
+nav input{width:100%;background:var(--raised);border:0;border-radius:6px;color:var(--text);padding:8px 10px;font:inherit;margin-bottom:14px}
+nav input:focus{outline:2px solid var(--accent)}
+nav .head{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 6px 6px}
+nav a{display:block;color:var(--text);text-decoration:none;padding:5px 8px;border-radius:6px}
+nav a:hover{background:var(--line)} nav a.on{color:var(--accent);background:var(--raised)}
+nav .toc a{font-size:13px;color:var(--muted);padding:2px 8px 2px 18px} nav .toc a.l3{padding-left:30px}
+#results a{font-size:14px} #results .where{display:block;color:var(--muted);font-size:12px}
+main{flex:1;min-width:0;padding:32px 48px 80px}
+article{max-width:820px}
+h1{font-size:28px;margin:0 0 16px} h2{font-size:20px;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)} h3{font-size:16px;margin:24px 0 8px}
+a{color:var(--accent)} p,ul,table,pre,figure{margin:0 0 16px}
+code{font-family:Consolas,"Cascadia Mono",monospace;font-size:13px;background:var(--raised);border-radius:4px;padding:1px 5px}
+pre{background:var(--surface);border-radius:8px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:13px;line-height:1.5}
+pre.sig{border-left:3px solid var(--accent)}
+table{border-collapse:collapse;width:100%} th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+figure{background:var(--surface);border-radius:8px;padding:10px} figure img{max-width:100%;border-radius:4px;display:block} figcaption{color:var(--muted);font-size:13px;margin-top:6px}
+section.api{background:var(--surface);border-radius:8px;padding:4px 16px 2px;margin:0 0 12px} section.api h3{margin-top:12px}
+.muted{color:var(--muted)} .kw{color:var(--pink)} .str{color:var(--yellow)} .com{color:#6272A4} .num{color:var(--purple)}
+@media(max-width:800px){body{display:block}nav{width:auto;height:auto;position:static}main{padding:20px}}
+</style></head><body>
+<nav><div class="brand">David <span>mods</span><a class="lang" href="../formats.html">EN</a></div><input id="search" placeholder="Buscar no guia" autocomplete="off"><div id="results"></div>
+<div class="head">Início</div><a href="index.html">Primeiros passos</a><a href="tutorial-shader.html">Efeito de shader</a><a href="tutorial-lua-command.html">Comando Lua</a><a href="tutorial-lua-tool.html">Ferramenta Lua</a><a href="tutorial-lua-window.html">Janelas Lua</a><div class="head">Referência</div><a href="tutorial-native.html">Plugin nativo</a><a href="concepts.html">Conceitos</a><a href="cookbook.html">Receitas</a><a href="reference.html">Referência da API</a><a href="effects.html">Efeitos embutidos</a><a href="formats.html" class="on">Padrões, temas, arquivos</a><a href="versioning.html">Versionamento</a><div id="toc"><div class="head">Nesta página</div><div class="toc"><a class="l2" href="#padr-es-de-pontilhado">Padrões de pontilhado</a><a class="l2" href="#temas">Temas</a><a class="l2" href="#o-arquivo-david">O arquivo .david</a></div></div></nav>
+<main><article><h1 id="padr-es-temas-e-formatos-de-arquivo">Padrões, temas e formatos de arquivo</h1>
+<p>Isto não é código, mas também são formas de estender o David.</p>
+<h2 id="padr-es-de-pontilhado">Padrões de pontilhado</h2>
+<p><strong>Efeitos &gt; Cor &gt; Pontilhado</strong> com o método <strong>Padrão</strong> usa uma matriz de limiares. O David traz Bayer 2×2, 4×4, 8×8 e ruído azul, e carrega outros da pasta <code>patterns</code> ao lado do programa e da sua pasta de configuração. Um padrão é referenciado pelo seu id, inclusive pela CLI: <code>--effect dither:method=Pattern,pattern=my-pattern</code>.</p>
+<table><thead><tr><th>Arquivo</th><th>Id</th><th>Formato</th></tr></thead><tbody><tr><td><code>.png</code></td><td>o nome do arquivo</td><td>Uma imagem em tons de cinza; mais escuro significa limiar menor. Os níveis de cinza distintos são ordenados, então qualquer faixa serve (0–3, 0–255, ...).</td></tr><tr><td><code>.json</code></td><td>o nome do arquivo</td><td><code>[[0, 8, 2, 10], [12, 4, 14, 6], ...]</code>, ou <code>{ "matrix": [...], "max": 15 }</code> quando os valores não chegam ao máximo.</td></tr><tr><td><code>.csv</code></td><td>o nome do arquivo</td><td>Uma linha por linha do arquivo, com valores separados por vírgulas.</td></tr><tr><td><code>.aseprite-extension</code></td><td>o <code>id</code> de cada matriz</td><td>O zip de extensão do Aseprite: um <code>package.json</code> com <code>contributes.ditheringMatrices</code> (<code>id</code>, <code>name</code>, <code>path</code>) ao lado dos arquivos de matriz. O mesmo pacote funciona no Aseprite e no David.</td></tr></tbody></table>
+<p>Um valor v em uma matriz cujo maior valor é max vira o limiar (v + 0.5) / (max + 1).</p>
+<h2 id="temas">Temas</h2>
+<p>Um tema é um arquivo JSON na pasta <code>themes</code> (nativos) ou na pasta <code>themes</code> da sua configuração (os seus). Configurações &gt; Aparência cria uma cópia para você editar, e o David a recarrega quando o arquivo muda.</p>
+<pre class="lang-json"><code>{
+  "name": "Dev",
+  "colors": { "bg": "#1A1A1A", "surface": "#212121", "accent": "#8BE9FD", "...": "..." },
+  "shape": { "radius": 4, "borderWidth": 0, "spacing": 6, "fontSize": 15, "font": "" }
+}</code></pre>
+<table><thead><tr><th>Token</th><th>Usado para</th></tr></thead><tbody><tr><td><code>bg</code>, <code>surface</code>, <code>raised</code></td><td>Fundo da janela, painéis, campos e botões</td></tr><tr><td><code>line</code>, <code>hover</code>, <code>pressed</code></td><td>Divisores e preenchimentos neutros, e seus estados</td></tr><tr><td><code>text</code>, <code>textMuted</code></td><td>Texto e texto secundário</td></tr><tr><td><code>accent</code>, <code>accentHover</code>, <code>onAccent</code></td><td>A única cor de destaque, seu estado hover e o texto sobre ela</td></tr><tr><td><code>good</code>, <code>warn</code>, <code>bad</code></td><td>Cores de status</td></tr><tr><td><code>canvasBg</code>, <code>checkerA</code>, <code>checkerB</code></td><td>Ao redor da imagem e o xadrez de transparência</td></tr><tr><td><code>selectionAnts</code>, <code>nub</code></td><td>Formigas marchantes e alças na tela</td></tr><tr><td><code>radius</code>, <code>borderWidth</code>, <code>spacing</code>, <code>fontSize</code>, <code>font</code></td><td>Raio dos cantos, largura da borda, espaçamento entre itens, tamanho da fonte da interface e arquivo de fonte</td></tr></tbody></table>
+<h2 id="o-arquivo-david">O arquivo .david</h2>
+<p>Um zip: <code>doc.json</code>, <code>layers/0.png</code>, <code>layers/1.png</code>, ... (a de baixo primeiro) e <code>merged.png</code> (a imagem achatada, para pré-visualizações).</p>
+<pre class="lang-json"><code>{
+  "app": "david", "version": 1, "width": 64, "height": 64, "dpi": 96, "active": 1,
+  "palette": ["1a1c2c", "5d275d"],
+  "layers": [
+    { "name": "Background", "visible": true, "opacity": 255, "blend": "normal", "file": "layers/0.png" }
+  ]
+}</code></pre>
+<p>O David também lê e escreve OpenRaster (<code>.ora</code>), que o Krita, o GIMP e o MyPaint abrem. Os modos de mesclagem que o OpenRaster não tem são guardados como <code>david:&lt;mode&gt;</code>, que os outros programas leem como normal.</p></article></main><script src="search-index.js"></script><script>
+(function(){
+  var box = document.getElementById('search'), res = document.getElementById('results'), toc = document.getElementById('toc');
+  box.addEventListener('input', function(){
+    var q = box.value.trim().toLowerCase();
+    if(!q){ res.innerHTML = ''; toc.style.display = ''; return; }
+    toc.style.display = 'none';
+    var words = q.split(/\s+/), hits = [];
+    DAVID_INDEX.forEach(function(e){
+      var t = (e.title + ' ' + e.text).toLowerCase(), score = 0;
+      for(var i = 0; i < words.length; i++){ if(t.indexOf(words[i]) < 0) return; score += e.title.toLowerCase().indexOf(words[i]) >= 0 ? 3 : 1; }
+      hits.push([score, e]);
+    });
+    hits.sort(function(a, b){ return b[0] - a[0]; });
+    res.innerHTML = hits.slice(0, 30).map(function(h){
+      var e = h[1];
+      return '<a href="' + e.url + '">' + e.title.replace(/</g, '&lt;') + '<span class="where">' + e.page + '</span></a>';
+    }).join('') || '<div class="muted" style="padding:6px 8px">Nada encontrado</div>';
+  });
+  var kw = /\b(local|function|end|if|then|else|elseif|for|do|while|return|nil|true|false|and|or|not|in|vec2|vec3|vec4|float|int|bool|uniform|static|const|struct|typedef|void|uint32_t|uint8_t|size_t|return|include|define)\b/g;
+  document.querySelectorAll('pre:not(.lang-json):not(.lang-text) code').forEach(function(c){
+    var h = c.innerHTML;
+    h = h.replace(/(--[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, '\u0001$1\u0002');
+    h = h.split(/(\u0001[^\u0002]*\u0002)/).map(function(s){
+      if(s.charAt(0) === '\u0001') return '<span class="com">' + s.slice(1, -1) + '</span>';
+      return s.replace(/(&quot;[^&]*&quot;|"[^"\n]*")/g, '<span class="str">$1</span>').replace(kw, '<span class="kw">$1</span>');
+    }).join('');
+    c.innerHTML = h;
+  });
+})();
+</script></body></html>

@@ -1,0 +1,11 @@
+build/
+vcpkg_installed/
+out/
+.vs/
+*.user
+*.log
+dist/
+
+# Planning files stay local
+PLAN.md
+FEATURE-LOG.md

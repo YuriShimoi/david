@@ -1,0 +1,121 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Native plugin · David modding</title><style>
+:root{--bg:#1A1A1A;--surface:#212121;--raised:#2A2A2A;--line:#44475A;--hover:#525568;--text:#FFFFFF;--muted:#A3A3A3;--accent:#8BE9FD;--good:#50FA7B;--warn:#FFB86C;--pink:#FF79C6;--purple:#BD93F9;--yellow:#F1FA8C}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.6 "Segoe UI",system-ui,sans-serif;display:flex}
+nav{width:260px;flex:none;background:var(--surface);height:100vh;position:sticky;top:0;overflow:auto;padding:20px 14px}
+nav .brand{font-weight:700;font-size:17px;margin:0 6px 14px;display:flex;gap:8px;align-items:center}
+nav .brand span{color:var(--accent)} nav .brand a.lang{margin-left:auto;font-size:12px;font-weight:400;padding:2px 8px;color:var(--muted)}
+nav input{width:100%;background:var(--raised);border:0;border-radius:6px;color:var(--text);padding:8px 10px;font:inherit;margin-bottom:14px}
+nav input:focus{outline:2px solid var(--accent)}
+nav .head{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 6px 6px}
+nav a{display:block;color:var(--text);text-decoration:none;padding:5px 8px;border-radius:6px}
+nav a:hover{background:var(--line)} nav a.on{color:var(--accent);background:var(--raised)}
+nav .toc a{font-size:13px;color:var(--muted);padding:2px 8px 2px 18px} nav .toc a.l3{padding-left:30px}
+#results a{font-size:14px} #results .where{display:block;color:var(--muted);font-size:12px}
+main{flex:1;min-width:0;padding:32px 48px 80px}
+article{max-width:820px}
+h1{font-size:28px;margin:0 0 16px} h2{font-size:20px;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)} h3{font-size:16px;margin:24px 0 8px}
+a{color:var(--accent)} p,ul,table,pre,figure{margin:0 0 16px}
+code{font-family:Consolas,"Cascadia Mono",monospace;font-size:13px;background:var(--raised);border-radius:4px;padding:1px 5px}
+pre{background:var(--surface);border-radius:8px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:13px;line-height:1.5}
+pre.sig{border-left:3px solid var(--accent)}
+table{border-collapse:collapse;width:100%} th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+figure{background:var(--surface);border-radius:8px;padding:10px} figure img{max-width:100%;border-radius:4px;display:block} figcaption{color:var(--muted);font-size:13px;margin-top:6px}
+section.api{background:var(--surface);border-radius:8px;padding:4px 16px 2px;margin:0 0 12px} section.api h3{margin-top:12px}
+.muted{color:var(--muted)} .kw{color:var(--pink)} .str{color:var(--yellow)} .com{color:#6272A4} .num{color:var(--purple)}
+@media(max-width:800px){body{display:block}nav{width:auto;height:auto;position:static}main{padding:20px}}
+</style></head><body>
+<nav><div class="brand">David <span>modding</span><a class="lang" href="pt-BR/tutorial-native.html">PT</a></div><input id="search" placeholder="Search the guide" autocomplete="off"><div id="results"></div>
+<div class="head">Start</div><a href="index.html">Getting started</a><a href="tutorial-shader.html">Shader effect</a><a href="tutorial-lua-command.html">Lua command</a><a href="tutorial-lua-tool.html">Lua tool</a><a href="tutorial-lua-window.html">Lua windows</a><div class="head">Reference</div><a href="tutorial-native.html" class="on">Native plugin</a><a href="concepts.html">Concepts</a><a href="cookbook.html">Cookbook</a><a href="reference.html">API reference</a><a href="effects.html">Built-in effects</a><a href="formats.html">Patterns, themes, files</a><a href="versioning.html">Versioning</a><div id="toc"><div class="head">On this page</div><div class="toc"><a class="l2" href="#the-c-abi">The C ABI</a><a class="l2" href="#1-mod-json">1. mod.json</a><a class="l2" href="#2-the-format">2. The format</a><a class="l2" href="#3-registering">3. Registering</a><a class="l2" href="#4-building">4. Building</a><a class="l2" href="#safety">Safety</a></div></div></nav>
+<main><article><h1 id="tutorial-a-qoi-like-file-type-native-plugin">Tutorial: a QOI-like file type (native plugin)</h1>
+<p>A plugin in C that opens and saves <code>.qlike</code> files (runs of RGBA pixels), and adds a small <strong>Swap Red/Blue</strong> effect. The finished mod is <code>mods/examples/qoi-like</code>; David's own build compiles it too.</p>
+<h2 id="the-c-abi">The C ABI</h2>
+<p>Native plugins talk to David through one C header, <code>sdk/david_plugin.h</code>. It is plain C, so a plugin can be built with any compiler (MSVC, GCC, Clang) and any language that can export a C function.</p>
+<p>The plugin exports one function:</p>
+<pre class="lang-c"><code>DAVID_PLUGIN_EXPORT int david_plugin_init(const david_host* host);</code></pre>
+<p><code>host</code> has the API version, an allocator, <code>register_effect</code>, <code>register_format</code> and <code>log</code>. Return 0 when everything registered.</p>
+<h2 id="1-mod-json">1. mod.json</h2>
+<pre class="lang-json"><code>{
+  "name": "QOI-like File Type",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "native",
+  "entry": "qlike"
+}</code></pre>
+<p><code>entry</code> is the library name without its extension: David loads <code>qlike.dll</code> on Windows and <code>libqlike.so</code> or <code>qlike.so</code> on Linux.</p>
+<h2 id="2-the-format">2. The format</h2>
+<pre class="lang-c"><code>static const david_host* s_host;
+
+static int load(void* user, const uint8_t* bytes, size_t size, david_image* out) {
+  if(size &lt; 12 || memcmp(bytes, "QLIK", 4)) return 1;
+  /* read width and height, then: */
+  out-&gt;pixels = (uint32_t*)s_host-&gt;alloc((size_t)w * h * 4);
+  /* fill out-&gt;pixels, set out-&gt;width and out-&gt;height */
+  return 0;
+}
+
+static int save(void* user, const david_image* img, uint8_t** bytes, size_t* size) {
+  uint8_t* o = (uint8_t*)s_host-&gt;alloc(12 + (size_t)img-&gt;width * img-&gt;height * 5);
+  /* write the file into o */
+  *bytes = o;
+  *size = written;
+  return 0;
+}</code></pre>
+<p>Pixels are <code>uint32_t</code>, straight RGBA with red in the low byte, rows top first. <strong>Memory you hand to David must come from <code>host-&gt;alloc</code></strong>: the plugin and David may use different C runtimes, so David frees it with its own.</p>
+<h2 id="3-registering">3. Registering</h2>
+<pre class="lang-c"><code>DAVID_PLUGIN_EXPORT int david_plugin_init(const david_host* host) {
+  if(host-&gt;api_version &lt; DAVID_API_VERSION) return 1;
+  s_host = host;
+  david_format format = { "qlike", "QOI-like", load, save, NULL };
+  david_effect effect = { "swap-red-blue", "Swap Red/Blue", "Effects/Mods", "[]", swapRedBlue, NULL };
+  if(host-&gt;register_format(&amp;format)) return 2;
+  if(host-&gt;register_effect(&amp;effect)) return 3;
+  return 0;
+}</code></pre>
+<p>The structs can live on the stack: David copies them. Effect params are a JSON array, the same fields as Lua's (<code>id</code>, <code>label</code>, <code>type</code>, <code>min</code>, <code>max</code>, <code>default</code>, <code>choices</code>); <code>run</code> gets the values as a JSON object.</p>
+<h2 id="4-building">4. Building</h2>
+<p>The example has its own <code>CMakeLists.txt</code>:</p>
+<pre class="lang-cmake"><code>cmake_minimum_required(VERSION 3.20)
+project(qoi_like C)
+set(DAVID_SDK "${CMAKE_CURRENT_SOURCE_DIR}/../../../sdk" CACHE PATH "Folder with david_plugin.h")
+add_library(qlike SHARED qoi_like.c)
+target_include_directories(qlike PRIVATE ${DAVID_SDK})
+set_target_properties(qlike PROPERTIES PREFIX "")</code></pre>
+<p>Windows (a Visual Studio developer prompt) and Linux are the same:</p>
+<pre class="lang-text"><code>cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release</code></pre>
+<p>Copy <code>qlike.dll</code> (or <code>qlike.so</code>) next to <code>mod.json</code>, restart David and turn the mod on. <strong>File &gt; Save As</strong> now offers <code>.qlike</code>, and <code>david-cli in.png -o out.qlike</code> works too.</p>
+<h2 id="safety">Safety</h2>
+<p>A native plugin runs with David's full rights: only install plugins you trust. Lua and shader mods are sandboxed; native ones can't be.</p></article></main><script src="search-index.js"></script><script>
+(function(){
+  var box = document.getElementById('search'), res = document.getElementById('results'), toc = document.getElementById('toc');
+  box.addEventListener('input', function(){
+    var q = box.value.trim().toLowerCase();
+    if(!q){ res.innerHTML = ''; toc.style.display = ''; return; }
+    toc.style.display = 'none';
+    var words = q.split(/\s+/), hits = [];
+    DAVID_INDEX.forEach(function(e){
+      var t = (e.title + ' ' + e.text).toLowerCase(), score = 0;
+      for(var i = 0; i < words.length; i++){ if(t.indexOf(words[i]) < 0) return; score += e.title.toLowerCase().indexOf(words[i]) >= 0 ? 3 : 1; }
+      hits.push([score, e]);
+    });
+    hits.sort(function(a, b){ return b[0] - a[0]; });
+    res.innerHTML = hits.slice(0, 30).map(function(h){
+      var e = h[1];
+      return '<a href="' + e.url + '">' + e.title.replace(/</g, '&lt;') + '<span class="where">' + e.page + '</span></a>';
+    }).join('') || '<div class="muted" style="padding:6px 8px">Nothing found</div>';
+  });
+  var kw = /\b(local|function|end|if|then|else|elseif|for|do|while|return|nil|true|false|and|or|not|in|vec2|vec3|vec4|float|int|bool|uniform|static|const|struct|typedef|void|uint32_t|uint8_t|size_t|return|include|define)\b/g;
+  document.querySelectorAll('pre:not(.lang-json):not(.lang-text) code').forEach(function(c){
+    var h = c.innerHTML;
+    h = h.replace(/(--[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, '\u0001$1\u0002');
+    h = h.split(/(\u0001[^\u0002]*\u0002)/).map(function(s){
+      if(s.charAt(0) === '\u0001') return '<span class="com">' + s.slice(1, -1) + '</span>';
+      return s.replace(/(&quot;[^&]*&quot;|"[^"\n]*")/g, '<span class="str">$1</span>').replace(kw, '<span class="kw">$1</span>');
+    }).join('');
+    c.innerHTML = h;
+  });
+})();
+</script></body></html>

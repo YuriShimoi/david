@@ -1,0 +1,31 @@
+{
+  "name": "Classic",
+  "colors": {
+    "bg": "#F6F6F6",
+    "surface": "#EDEDED",
+    "raised": "#D8D7D7",
+    "line": "#D1D1D1",
+    "hover": "#CBDEED",
+    "pressed": "#CCE4F7",
+    "text": "#1B1B1B",
+    "textMuted": "#5D5D5D",
+    "accent": "#0078D4",
+    "accentHover": "#1A86D9",
+    "onAccent": "#FFFFFF",
+    "good": "#107C10",
+    "warn": "#C27C0E",
+    "bad": "#C42B1C",
+    "canvasBg": "#E6E6E6",
+    "checkerA": "#FFFFFF",
+    "checkerB": "#CCCCCC",
+    "selectionAnts": "#000000",
+    "nub": "#0078D4"
+  },
+  "shape": {
+    "radius": 4,
+    "borderWidth": 1,
+    "spacing": 6,
+    "fontSize": 15,
+    "font": ""
+  }
+}

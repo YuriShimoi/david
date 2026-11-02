@@ -1,0 +1,8 @@
+{
+  "name": "Canvas Info",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "lua",
+  "entry": "main.lua",
+  "description": "A tool window with the image's size, layers and frames, and a dialog that renames the layers."
+}

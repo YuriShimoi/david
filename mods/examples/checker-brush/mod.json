@@ -1,0 +1,8 @@
+{
+  "name": "Checker Brush",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "lua",
+  "entry": "main.lua",
+  "description": "A brush that paints only every other pixel, in a checkerboard."
+}

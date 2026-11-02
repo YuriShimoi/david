@@ -1,0 +1,130 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Janelas Lua · Mods do David</title><style>
+:root{--bg:#1A1A1A;--surface:#212121;--raised:#2A2A2A;--line:#44475A;--hover:#525568;--text:#FFFFFF;--muted:#A3A3A3;--accent:#8BE9FD;--good:#50FA7B;--warn:#FFB86C;--pink:#FF79C6;--purple:#BD93F9;--yellow:#F1FA8C}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.6 "Segoe UI",system-ui,sans-serif;display:flex}
+nav{width:260px;flex:none;background:var(--surface);height:100vh;position:sticky;top:0;overflow:auto;padding:20px 14px}
+nav .brand{font-weight:700;font-size:17px;margin:0 6px 14px;display:flex;gap:8px;align-items:center}
+nav .brand span{color:var(--accent)} nav .brand a.lang{margin-left:auto;font-size:12px;font-weight:400;padding:2px 8px;color:var(--muted)}
+nav input{width:100%;background:var(--raised);border:0;border-radius:6px;color:var(--text);padding:8px 10px;font:inherit;margin-bottom:14px}
+nav input:focus{outline:2px solid var(--accent)}
+nav .head{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 6px 6px}
+nav a{display:block;color:var(--text);text-decoration:none;padding:5px 8px;border-radius:6px}
+nav a:hover{background:var(--line)} nav a.on{color:var(--accent);background:var(--raised)}
+nav .toc a{font-size:13px;color:var(--muted);padding:2px 8px 2px 18px} nav .toc a.l3{padding-left:30px}
+#results a{font-size:14px} #results .where{display:block;color:var(--muted);font-size:12px}
+main{flex:1;min-width:0;padding:32px 48px 80px}
+article{max-width:820px}
+h1{font-size:28px;margin:0 0 16px} h2{font-size:20px;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)} h3{font-size:16px;margin:24px 0 8px}
+a{color:var(--accent)} p,ul,table,pre,figure{margin:0 0 16px}
+code{font-family:Consolas,"Cascadia Mono",monospace;font-size:13px;background:var(--raised);border-radius:4px;padding:1px 5px}
+pre{background:var(--surface);border-radius:8px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:13px;line-height:1.5}
+pre.sig{border-left:3px solid var(--accent)}
+table{border-collapse:collapse;width:100%} th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+figure{background:var(--surface);border-radius:8px;padding:10px} figure img{max-width:100%;border-radius:4px;display:block} figcaption{color:var(--muted);font-size:13px;margin-top:6px}
+section.api{background:var(--surface);border-radius:8px;padding:4px 16px 2px;margin:0 0 12px} section.api h3{margin-top:12px}
+.muted{color:var(--muted)} .kw{color:var(--pink)} .str{color:var(--yellow)} .com{color:#6272A4} .num{color:var(--purple)}
+@media(max-width:800px){body{display:block}nav{width:auto;height:auto;position:static}main{padding:20px}}
+</style></head><body>
+<nav><div class="brand">David <span>mods</span><a class="lang" href="../tutorial-lua-window.html">EN</a></div><input id="search" placeholder="Buscar no guia" autocomplete="off"><div id="results"></div>
+<div class="head">Início</div><a href="index.html">Primeiros passos</a><a href="tutorial-shader.html">Efeito de shader</a><a href="tutorial-lua-command.html">Comando Lua</a><a href="tutorial-lua-tool.html">Ferramenta Lua</a><a href="tutorial-lua-window.html" class="on">Janelas Lua</a><div class="head">Referência</div><a href="tutorial-native.html">Plugin nativo</a><a href="concepts.html">Conceitos</a><a href="cookbook.html">Receitas</a><a href="reference.html">Referência da API</a><a href="effects.html">Efeitos embutidos</a><a href="formats.html">Padrões, temas, arquivos</a><a href="versioning.html">Versionamento</a><div id="toc"><div class="head">Nesta página</div><div class="toc"><a class="l2" href="#dois-tipos-de-janela">Dois tipos de janela</a><a class="l2" href="#a-janela-de-ferramenta">A janela de ferramenta</a><a class="l2" href="#o-di-logo">O diálogo</a><a class="l2" href="#desfazer">Desfazer</a><a class="l2" href="#quando-algo-d-errado">Quando algo dá errado</a><a class="l2" href="#widgets">Widgets</a></div></div></nav>
+<main><article><h1 id="tutorial-canvas-info-janelas-lua">Tutorial: Canvas Info (janelas Lua)</h1>
+<p>Uma janela de ferramenta que encaixa ao lado de Camadas e mostra o tamanho, as camadas e os quadros da imagem, além de uma caixa de diálogo que ela abre para renomear as camadas. O mod pronto está em <code>mods/examples/canvas-info</code>.</p>
+<h2 id="dois-tipos-de-janela">Dois tipos de janela</h2>
+<ul><li><strong>Janela de ferramenta</strong> (<code>kind = "tool"</code>, o padrão): encaixa como Cores, Camadas e Histórico. Ela abre primeiro como uma aba ao lado de Camadas; arraste a aba para encaixá-la em outro lugar. Com Configurações &gt; Aparência &gt; janelas flutuantes ativado, ela flutua como as outras janelas.</li><li><strong>Diálogo</strong> (<code>kind = "dialog"</code>): flutua sobre a tela como as Configurações e nunca encaixa. Esc fecha.</li></ul>
+<p>Os dois aparecem no menu Mods (marcados enquanto abertos), e o David lembra quais estavam abertos na próxima sessão.</p>
+<h2 id="a-janela-de-ferramenta">A janela de ferramenta</h2>
+<p>O <code>mod.json</code> é o mesmo do <a href="tutorial-lua-command.html">tutorial de comando</a>, com <code>"entry": "main.lua"</code>. Depois:</p>
+<pre class="lang-lua"><code>local count = 0
+
+david.window{
+  id = "canvas-info",
+  title = "Canvas Info",
+  draw = function(ui, doc)
+    ui:header("Image")
+    ui:text(doc.width .. " x " .. doc.height .. " px")
+    ui:text(doc:layerCount() .. " layers, " .. doc:frameCount() .. " frames")
+
+    ui:header("Active layer")
+    local layer = doc:layer()
+    ui:text(layer.name)
+    if ui:button("Count opaque pixels", -1) then
+      count = 0
+      for y = 0, doc.height - 1 do
+        for x = 0, doc.width - 1 do
+          local _, _, _, a = david.channels(layer:get(x, y))
+          if a &gt; 0 then count = count + 1 end
+        end
+      end
+    end
+    ui:muted(count .. " opaque pixels at the last count")
+
+    if ui:button("Rename Layers...", -1) then david.openWindow("rename") end
+  end,
+}</code></pre>
+<p><code>draw(ui, doc)</code> roda <strong>a cada quadro</strong> enquanto a janela está aberta (modo imediato): ela reconstrói o conteúdo toda vez a partir do documento e das variáveis do próprio mod. Mantenha-a leve; faça o trabalho pesado só quando um botão for pressionado, como a contagem de pixels faz aqui.</p>
+<p>Os widgets são dispostos de cima para baixo. Um botão retorna <code>true</code> no quadro em que foi clicado; <code>-1</code> como largura preenche a linha.</p>
+<h2 id="o-di-logo">O diálogo</h2>
+<pre class="lang-lua"><code>local prefix, numbered, start = "Layer", true, 1
+
+david.window{
+  id = "rename",
+  title = "Rename Layers",
+  kind = "dialog",
+  width = 360,
+  height = 200,
+  draw = function(ui, doc)
+    prefix = ui:input("Prefix", prefix)
+    numbered = ui:checkbox("Number them", numbered)
+    if numbered then start = ui:slider("Start at", start, 0, 100) end
+    ui:separator()
+    if ui:button("Apply", 100) then
+      for i = 1, doc:layerCount() do
+        doc:layer(i).name = numbered and (prefix .. " " .. (start + i - 1)) or prefix
+      end
+      ui:close()
+    end
+    ui:sameLine()
+    if ui:button("Cancel", 100) then ui:close() end
+  end,
+}</code></pre>
+<p>Os widgets de valor recebem o valor atual e retornam o novo (mais <code>true</code> como segundo resultado quando ele mudou), então o padrão é sempre <code>value = ui:widget("Label", value)</code>. Os rótulos ficam à esquerda, como nos diálogos de efeito; o controle deslizante é a mesma barra com um campo numérico.</p>
+<p><code>width</code> e <code>height</code> são o tamanho com que a janela abre da primeira vez; depois disso o David mantém o tamanho que o usuário definiu.</p>
+<h2 id="desfazer">Desfazer</h2>
+<p>Tudo o que uma chamada de <code>draw</code> altera no documento é <strong>uma única etapa de desfazer</strong>, com o nome da janela (aqui "Rename Layers"). Por isso, altere o documento ao pressionar um botão, e não enquanto um controle deslizante se move, ou cada quadro do arrasto vira uma etapa própria.</p>
+<h2 id="quando-algo-d-errado">Quando algo dá errado</h2>
+<p>Se <code>draw</code> gerar um erro, a janela mostra o erro no lugar do conteúdo e o erro vai para o log do mod (Configurações &gt; Mods). Corrija o arquivo e salve: o mod recarrega e a janela volta a ser desenhada.</p>
+<h2 id="widgets">Widgets</h2>
+<table><thead><tr><th>Chamada</th><th>Retorna</th></tr></thead><tbody><tr><td><code>ui:text(s)</code>, <code>ui:muted(s)</code>, <code>ui:header(s)</code></td><td></td></tr><tr><td><code>ui:separator()</code>, <code>ui:spacing()</code>, <code>ui:sameLine()</code></td><td></td></tr><tr><td><code>ui:button(label [, width])</code></td><td>pressionado</td></tr><tr><td><code>ui:checkbox(label, value)</code></td><td>valor, mudou</td></tr><tr><td><code>ui:slider(label, value, min, max [, step])</code></td><td>valor, mudou</td></tr><tr><td><code>ui:choice(label, index, { names })</code></td><td>índice (a partir de 1), mudou</td></tr><tr><td><code>ui:color(label, color)</code></td><td>cor, mudou</td></tr><tr><td><code>ui:input(label, text)</code></td><td>texto, mudou</td></tr><tr><td><code>ui:width()</code></td><td>a largura restante na linha</td></tr><tr><td><code>ui:close()</code></td><td></td></tr></tbody></table>
+<p>Dois widgets com o mesmo rótulo não são problema; o texto depois de <code>##</code> em um rótulo não é exibido. A <a href="reference.html#lua-ui">referência da API</a> tem os detalhes.</p></article></main><script src="search-index.js"></script><script>
+(function(){
+  var box = document.getElementById('search'), res = document.getElementById('results'), toc = document.getElementById('toc');
+  box.addEventListener('input', function(){
+    var q = box.value.trim().toLowerCase();
+    if(!q){ res.innerHTML = ''; toc.style.display = ''; return; }
+    toc.style.display = 'none';
+    var words = q.split(/\s+/), hits = [];
+    DAVID_INDEX.forEach(function(e){
+      var t = (e.title + ' ' + e.text).toLowerCase(), score = 0;
+      for(var i = 0; i < words.length; i++){ if(t.indexOf(words[i]) < 0) return; score += e.title.toLowerCase().indexOf(words[i]) >= 0 ? 3 : 1; }
+      hits.push([score, e]);
+    });
+    hits.sort(function(a, b){ return b[0] - a[0]; });
+    res.innerHTML = hits.slice(0, 30).map(function(h){
+      var e = h[1];
+      return '<a href="' + e.url + '">' + e.title.replace(/</g, '&lt;') + '<span class="where">' + e.page + '</span></a>';
+    }).join('') || '<div class="muted" style="padding:6px 8px">Nada encontrado</div>';
+  });
+  var kw = /\b(local|function|end|if|then|else|elseif|for|do|while|return|nil|true|false|and|or|not|in|vec2|vec3|vec4|float|int|bool|uniform|static|const|struct|typedef|void|uint32_t|uint8_t|size_t|return|include|define)\b/g;
+  document.querySelectorAll('pre:not(.lang-json):not(.lang-text) code').forEach(function(c){
+    var h = c.innerHTML;
+    h = h.replace(/(--[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, '\u0001$1\u0002');
+    h = h.split(/(\u0001[^\u0002]*\u0002)/).map(function(s){
+      if(s.charAt(0) === '\u0001') return '<span class="com">' + s.slice(1, -1) + '</span>';
+      return s.replace(/(&quot;[^&]*&quot;|"[^"\n]*")/g, '<span class="str">$1</span>').replace(kw, '<span class="kw">$1</span>');
+    }).join('');
+    c.innerHTML = h;
+  });
+})();
+</script></body></html>

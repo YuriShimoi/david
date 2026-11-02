@@ -1,0 +1,30 @@
+// The Windows icon and version info of david.exe (configured by CMake with the project version)
+#include <winver.h>
+
+1 ICON "@CMAKE_SOURCE_DIR@/assets/icons/david.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName", "YuriShimoi"
+      VALUE "FileDescription", "David"
+      VALUE "FileVersion", "@PROJECT_VERSION@"
+      VALUE "InternalName", "david"
+      VALUE "LegalCopyright", "MIT License"
+      VALUE "OriginalFilename", "david.exe"
+      VALUE "ProductName", "David"
+      VALUE "ProductVersion", "@PROJECT_VERSION@"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

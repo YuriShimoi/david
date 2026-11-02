@@ -1,0 +1,108 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Comando Lua · Mods do David</title><style>
+:root{--bg:#1A1A1A;--surface:#212121;--raised:#2A2A2A;--line:#44475A;--hover:#525568;--text:#FFFFFF;--muted:#A3A3A3;--accent:#8BE9FD;--good:#50FA7B;--warn:#FFB86C;--pink:#FF79C6;--purple:#BD93F9;--yellow:#F1FA8C}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.6 "Segoe UI",system-ui,sans-serif;display:flex}
+nav{width:260px;flex:none;background:var(--surface);height:100vh;position:sticky;top:0;overflow:auto;padding:20px 14px}
+nav .brand{font-weight:700;font-size:17px;margin:0 6px 14px;display:flex;gap:8px;align-items:center}
+nav .brand span{color:var(--accent)} nav .brand a.lang{margin-left:auto;font-size:12px;font-weight:400;padding:2px 8px;color:var(--muted)}
+nav input{width:100%;background:var(--raised);border:0;border-radius:6px;color:var(--text);padding:8px 10px;font:inherit;margin-bottom:14px}
+nav input:focus{outline:2px solid var(--accent)}
+nav .head{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 6px 6px}
+nav a{display:block;color:var(--text);text-decoration:none;padding:5px 8px;border-radius:6px}
+nav a:hover{background:var(--line)} nav a.on{color:var(--accent);background:var(--raised)}
+nav .toc a{font-size:13px;color:var(--muted);padding:2px 8px 2px 18px} nav .toc a.l3{padding-left:30px}
+#results a{font-size:14px} #results .where{display:block;color:var(--muted);font-size:12px}
+main{flex:1;min-width:0;padding:32px 48px 80px}
+article{max-width:820px}
+h1{font-size:28px;margin:0 0 16px} h2{font-size:20px;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)} h3{font-size:16px;margin:24px 0 8px}
+a{color:var(--accent)} p,ul,table,pre,figure{margin:0 0 16px}
+code{font-family:Consolas,"Cascadia Mono",monospace;font-size:13px;background:var(--raised);border-radius:4px;padding:1px 5px}
+pre{background:var(--surface);border-radius:8px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:13px;line-height:1.5}
+pre.sig{border-left:3px solid var(--accent)}
+table{border-collapse:collapse;width:100%} th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+figure{background:var(--surface);border-radius:8px;padding:10px} figure img{max-width:100%;border-radius:4px;display:block} figcaption{color:var(--muted);font-size:13px;margin-top:6px}
+section.api{background:var(--surface);border-radius:8px;padding:4px 16px 2px;margin:0 0 12px} section.api h3{margin-top:12px}
+.muted{color:var(--muted)} .kw{color:var(--pink)} .str{color:var(--yellow)} .com{color:#6272A4} .num{color:var(--purple)}
+@media(max-width:800px){body{display:block}nav{width:auto;height:auto;position:static}main{padding:20px}}
+</style></head><body>
+<nav><div class="brand">David <span>mods</span><a class="lang" href="../tutorial-lua-command.html">EN</a></div><input id="search" placeholder="Buscar no guia" autocomplete="off"><div id="results"></div>
+<div class="head">Início</div><a href="index.html">Primeiros passos</a><a href="tutorial-shader.html">Efeito de shader</a><a href="tutorial-lua-command.html" class="on">Comando Lua</a><a href="tutorial-lua-tool.html">Ferramenta Lua</a><a href="tutorial-lua-window.html">Janelas Lua</a><div class="head">Referência</div><a href="tutorial-native.html">Plugin nativo</a><a href="concepts.html">Conceitos</a><a href="cookbook.html">Receitas</a><a href="reference.html">Referência da API</a><a href="effects.html">Efeitos embutidos</a><a href="formats.html">Padrões, temas, arquivos</a><a href="versioning.html">Versionamento</a><div id="toc"><div class="head">Nesta página</div><div class="toc"><a class="l2" href="#1-mod-json">1. mod.json</a><a class="l2" href="#2-registrando-o-comando">2. Registrando o comando</a><a class="l2" href="#3-editando-pixels">3. Editando pixels</a><a class="l2" href="#4-desfazer">4. Desfazer</a><a class="l2" href="#notas">Notas</a></div></div></nav>
+<main><article><h1 id="tutorial-palette-swap-comando-lua">Tutorial: Palette Swap (comando Lua)</h1>
+<p>Um comando que troca uma cor por outra na camada ativa, dentro da seleção. Ele pergunta primeiro as duas cores e uma tolerância, e a mudança inteira vira um único passo de desfazer. O mod pronto está em <code>mods/examples/palette-swap</code>.</p>
+<h2 id="1-mod-json">1. mod.json</h2>
+<pre class="lang-json"><code>{
+  "name": "Palette Swap",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "lua",
+  "entry": "main.lua"
+}</code></pre>
+<h2 id="2-registrando-o-comando">2. Registrando o comando</h2>
+<p><code>main.lua</code> roda uma vez quando o mod é carregado. Ele registra coisas por meio da tabela <code>david</code>:</p>
+<pre class="lang-lua"><code>david.command{
+  id = "palette-swap",
+  name = "Palette Swap",
+  menu = "Mods/Color",
+  params = {
+    { id = "from", label = "Replace", type = "color" },
+    { id = "to", label = "With", type = "color" },
+    { id = "tolerance", label = "Tolerance", type = "int", min = 0, max = 255, default = 0 },
+  },
+  run = function(doc, p)
+    -- the edit goes here
+  end,
+}</code></pre>
+<p><code>menu = "Mods/Color"</code> o coloca em <strong>Mods &gt; Color</strong>. Como tem <code>params</code>, o David pede esses valores primeiro em uma janela (os parâmetros de cor começam na cor primária) e depois chama <code>run(doc, p)</code> com os valores por id.</p>
+<h2 id="3-editando-pixels">3. Editando pixels</h2>
+<p><code>doc:layer()</code> é a camada ativa. As cores são inteiros simples: <code>david.channels(c)</code> separa uma em r, g, b, a (0–255), e <code>david.rgba(r, g, b, a)</code> as junta.</p>
+<pre class="lang-lua"><code>run = function(doc, p)
+  local layer = doc:layer()
+  local fr, fg, fb = david.channels(p.from)
+  local tr, tg, tb = david.channels(p.to)
+  for y = 0, doc.height - 1 do
+    for x = 0, doc.width - 1 do
+      local r, g, b, a = david.channels(layer:get(x, y))
+      local close = math.abs(r - fr) &lt;= p.tolerance and math.abs(g - fg) &lt;= p.tolerance and math.abs(b - fb) &lt;= p.tolerance
+      if a &gt; 0 and close and doc:selected(x, y) &gt; 0 then
+        layer:set(x, y, david.rgba(tr, tg, tb, a))
+      end
+    end
+  end
+end,</code></pre>
+<p><code>layer:set</code> grava independentemente da seleção, então o comando verifica <code>doc:selected(x, y)</code> por conta própria (vale 255 em todo lugar quando nada está selecionado).</p>
+<h2 id="4-desfazer">4. Desfazer</h2>
+<p>Você não precisa fazer nada para o desfazer: toda mudança de pixel e de camada dentro de <code>run</code> vira um único passo do Histórico com o nome do comando. Se <code>run</code> gerar um erro, tudo o que ele mudou é restaurado e a mensagem aparece em uma janela.</p>
+<h2 id="notas">Notas</h2>
+<ul><li>Uma chamada que dure mais de 10 segundos é interrompida, para que um erro não possa travar o David.</li><li>Imagens grandes: ler e gravar pixels um a um pelo Lua é lento acima de alguns megapixels. Um efeito (<code>david.effect</code>) roda só sobre os limites da seleção; prefira-o para trabalho por pixel.</li><li>A mesma lógica de comando pode rodar pela CLI como script: veja o <a href="cookbook.html">livro de receitas</a>.</li></ul></article></main><script src="search-index.js"></script><script>
+(function(){
+  var box = document.getElementById('search'), res = document.getElementById('results'), toc = document.getElementById('toc');
+  box.addEventListener('input', function(){
+    var q = box.value.trim().toLowerCase();
+    if(!q){ res.innerHTML = ''; toc.style.display = ''; return; }
+    toc.style.display = 'none';
+    var words = q.split(/\s+/), hits = [];
+    DAVID_INDEX.forEach(function(e){
+      var t = (e.title + ' ' + e.text).toLowerCase(), score = 0;
+      for(var i = 0; i < words.length; i++){ if(t.indexOf(words[i]) < 0) return; score += e.title.toLowerCase().indexOf(words[i]) >= 0 ? 3 : 1; }
+      hits.push([score, e]);
+    });
+    hits.sort(function(a, b){ return b[0] - a[0]; });
+    res.innerHTML = hits.slice(0, 30).map(function(h){
+      var e = h[1];
+      return '<a href="' + e.url + '">' + e.title.replace(/</g, '&lt;') + '<span class="where">' + e.page + '</span></a>';
+    }).join('') || '<div class="muted" style="padding:6px 8px">Nada encontrado</div>';
+  });
+  var kw = /\b(local|function|end|if|then|else|elseif|for|do|while|return|nil|true|false|and|or|not|in|vec2|vec3|vec4|float|int|bool|uniform|static|const|struct|typedef|void|uint32_t|uint8_t|size_t|return|include|define)\b/g;
+  document.querySelectorAll('pre:not(.lang-json):not(.lang-text) code').forEach(function(c){
+    var h = c.innerHTML;
+    h = h.replace(/(--[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, '\u0001$1\u0002');
+    h = h.split(/(\u0001[^\u0002]*\u0002)/).map(function(s){
+      if(s.charAt(0) === '\u0001') return '<span class="com">' + s.slice(1, -1) + '</span>';
+      return s.replace(/(&quot;[^&]*&quot;|"[^"\n]*")/g, '<span class="str">$1</span>').replace(kw, '<span class="kw">$1</span>');
+    }).join('');
+    c.innerHTML = h;
+  });
+})();
+</script></body></html>

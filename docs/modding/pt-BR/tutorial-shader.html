@@ -1,0 +1,100 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Efeito de shader · Mods do David</title><style>
+:root{--bg:#1A1A1A;--surface:#212121;--raised:#2A2A2A;--line:#44475A;--hover:#525568;--text:#FFFFFF;--muted:#A3A3A3;--accent:#8BE9FD;--good:#50FA7B;--warn:#FFB86C;--pink:#FF79C6;--purple:#BD93F9;--yellow:#F1FA8C}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.6 "Segoe UI",system-ui,sans-serif;display:flex}
+nav{width:260px;flex:none;background:var(--surface);height:100vh;position:sticky;top:0;overflow:auto;padding:20px 14px}
+nav .brand{font-weight:700;font-size:17px;margin:0 6px 14px;display:flex;gap:8px;align-items:center}
+nav .brand span{color:var(--accent)} nav .brand a.lang{margin-left:auto;font-size:12px;font-weight:400;padding:2px 8px;color:var(--muted)}
+nav input{width:100%;background:var(--raised);border:0;border-radius:6px;color:var(--text);padding:8px 10px;font:inherit;margin-bottom:14px}
+nav input:focus{outline:2px solid var(--accent)}
+nav .head{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 6px 6px}
+nav a{display:block;color:var(--text);text-decoration:none;padding:5px 8px;border-radius:6px}
+nav a:hover{background:var(--line)} nav a.on{color:var(--accent);background:var(--raised)}
+nav .toc a{font-size:13px;color:var(--muted);padding:2px 8px 2px 18px} nav .toc a.l3{padding-left:30px}
+#results a{font-size:14px} #results .where{display:block;color:var(--muted);font-size:12px}
+main{flex:1;min-width:0;padding:32px 48px 80px}
+article{max-width:820px}
+h1{font-size:28px;margin:0 0 16px} h2{font-size:20px;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)} h3{font-size:16px;margin:24px 0 8px}
+a{color:var(--accent)} p,ul,table,pre,figure{margin:0 0 16px}
+code{font-family:Consolas,"Cascadia Mono",monospace;font-size:13px;background:var(--raised);border-radius:4px;padding:1px 5px}
+pre{background:var(--surface);border-radius:8px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:13px;line-height:1.5}
+pre.sig{border-left:3px solid var(--accent)}
+table{border-collapse:collapse;width:100%} th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+figure{background:var(--surface);border-radius:8px;padding:10px} figure img{max-width:100%;border-radius:4px;display:block} figcaption{color:var(--muted);font-size:13px;margin-top:6px}
+section.api{background:var(--surface);border-radius:8px;padding:4px 16px 2px;margin:0 0 12px} section.api h3{margin-top:12px}
+.muted{color:var(--muted)} .kw{color:var(--pink)} .str{color:var(--yellow)} .com{color:#6272A4} .num{color:var(--purple)}
+@media(max-width:800px){body{display:block}nav{width:auto;height:auto;position:static}main{padding:20px}}
+</style></head><body>
+<nav><div class="brand">David <span>mods</span><a class="lang" href="../tutorial-shader.html">EN</a></div><input id="search" placeholder="Buscar no guia" autocomplete="off"><div id="results"></div>
+<div class="head">Início</div><a href="index.html">Primeiros passos</a><a href="tutorial-shader.html" class="on">Efeito de shader</a><a href="tutorial-lua-command.html">Comando Lua</a><a href="tutorial-lua-tool.html">Ferramenta Lua</a><a href="tutorial-lua-window.html">Janelas Lua</a><div class="head">Referência</div><a href="tutorial-native.html">Plugin nativo</a><a href="concepts.html">Conceitos</a><a href="cookbook.html">Receitas</a><a href="reference.html">Referência da API</a><a href="effects.html">Efeitos embutidos</a><a href="formats.html">Padrões, temas, arquivos</a><a href="versioning.html">Versionamento</a><div id="toc"><div class="head">Nesta página</div><div class="toc"><a class="l2" href="#1-a-pasta">1. A pasta</a><a class="l2" href="#2-a-fun-o-de-efeito">2. A função de efeito</a><a class="l2" href="#3-nome-e-op-es">3. Nome e opções</a><a class="l2" href="#4-as-linhas">4. As linhas</a><a class="l2" href="#o-que-mais">O que mais</a></div></div></nav>
+<main><article><h1 id="tutorial-scanlines-efeito-de-shader">Tutorial: Scanlines (efeito de shader)</h1>
+<p>Vamos escrever um efeito que escurece linhas como uma tela CRT antiga, com quatro opções: espaçamento, espessura, escuridão e a cor da linha. O mod pronto está em <code>mods/examples/scanlines</code>.</p>
+<h2 id="1-a-pasta">1. A pasta</h2>
+<p>Crie uma pasta <code>scanlines</code> dentro da sua pasta de mods com este <code>mod.json</code>:</p>
+<pre class="lang-json"><code>{
+  "name": "Scanlines",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "shader",
+  "entry": "scanlines.glsl"
+}</code></pre>
+<h2 id="2-a-fun-o-de-efeito">2. A função de efeito</h2>
+<p>Um mod de shader define uma função, <code>vec4 effect(vec2 pos)</code>. O David a chama para cada pixel da seleção (ou da camada inteira). <code>pos</code> é a posição do pixel na imagem, e <code>pixel(pos)</code> lê a imagem ali. As cores são RGBA diretas, de 0 a 1.</p>
+<pre class="lang-glsl"><code>vec4 effect(vec2 pos) {
+  return pixel(pos);
+}</code></pre>
+<p>Esse efeito ainda não faz nada. Salve como <code>scanlines.glsl</code>, ative o mod em Configurações &gt; Mods, e ele aparece em <strong>Efeitos &gt; Mods</strong>.</p>
+<h2 id="3-nome-e-op-es">3. Nome e opções</h2>
+<p>Linhas de comentário que começam com <code>// @</code> descrevem o efeito. Cada <code>@param</code> vira um uniform com o mesmo nome e um controle na janela:</p>
+<pre class="lang-glsl"><code>// @name Scanlines
+// @id scanlines
+// @category Effects/Stylize
+// @param spacing int 2..16 = 2 "Spacing"
+// @param thickness int 1..8 = 1 "Thickness"
+// @param darkness float 0..1 = 0.5 "Darkness"
+// @param tint color = #000000FF "Line color"</code></pre>
+<table><thead><tr><th>Tipo</th><th>Linha</th><th>Uniform</th></tr></thead><tbody><tr><td>float</td><td><code>// @param id float min..max = default "Label"</code></td><td><code>float</code></td></tr><tr><td>int</td><td><code>// @param id int min..max = default "Label"</code></td><td><code>int</code></td></tr><tr><td>bool</td><td><code>// @param id bool = true "Label"</code></td><td><code>bool</code></td></tr><tr><td>escolha</td><td><code>// @param id choice One|Two|Three = 0 "Label"</code></td><td><code>int</code> (o índice)</td></tr><tr><td>cor</td><td><code>// @param id color = #RRGGBBAA "Label"</code></td><td><code>vec4</code></td></tr></tbody></table>
+<p><code>@id</code> é o nome que a CLI usa (<code>--effect scanlines:spacing=4</code>); sem ele, usa-se o nome da pasta. <code>@category</code> o coloca nos menus: <code>Effects/Stylize</code> é <strong>Efeitos &gt; Estilizar</strong>, <code>Adjustments</code> é o menu Ajustes. A janela atrás do diálogo não é escurecida, para que a prévia ao vivo possa ser avaliada; adicione <code>// @dim</code> para escurecê-la como os outros diálogos.</p>
+<h2 id="4-as-linhas">4. As linhas</h2>
+<pre class="lang-glsl"><code>vec4 effect(vec2 pos) {
+  vec4 c = pixel(pos);
+  bool line = mod(pos.y, float(spacing)) &lt; float(thickness);
+  if(line) c.rgb = mix(c.rgb, tint.rgb, darkness * tint.a);
+  return c;
+}</code></pre>
+<p>Salve. O mod recarrega, e <strong>Efeitos &gt; Estilizar &gt; Scanlines</strong> abre a janela com prévia ao vivo. OK vira um único passo de desfazer; Ctrl+F repete o efeito.</p>
+<figure><img src="../img/scanlines.png" alt="A janela do Scanlines sobre sua prévia ao vivo"><figcaption>A janela do Scanlines sobre sua prévia ao vivo</figcaption></figure>
+<h2 id="o-que-mais">O que mais</h2>
+<ul><li>Os uniforms <code>uSize</code> (o tamanho da área) e <code>uOrigin</code> (seu canto superior esquerdo na imagem) estão disponíveis se você precisar.</li><li><code>pixel()</code> limita nas bordas da área. A área é a caixa delimitadora da seleção.</li><li>Um erro de GLSL aparece em Configurações &gt; Mods com o número da linha, contado a partir do topo do seu arquivo.</li><li>A CLI também roda mods de shader; ela abre uma janela oculta para a GPU.</li></ul></article></main><script src="search-index.js"></script><script>
+(function(){
+  var box = document.getElementById('search'), res = document.getElementById('results'), toc = document.getElementById('toc');
+  box.addEventListener('input', function(){
+    var q = box.value.trim().toLowerCase();
+    if(!q){ res.innerHTML = ''; toc.style.display = ''; return; }
+    toc.style.display = 'none';
+    var words = q.split(/\s+/), hits = [];
+    DAVID_INDEX.forEach(function(e){
+      var t = (e.title + ' ' + e.text).toLowerCase(), score = 0;
+      for(var i = 0; i < words.length; i++){ if(t.indexOf(words[i]) < 0) return; score += e.title.toLowerCase().indexOf(words[i]) >= 0 ? 3 : 1; }
+      hits.push([score, e]);
+    });
+    hits.sort(function(a, b){ return b[0] - a[0]; });
+    res.innerHTML = hits.slice(0, 30).map(function(h){
+      var e = h[1];
+      return '<a href="' + e.url + '">' + e.title.replace(/</g, '&lt;') + '<span class="where">' + e.page + '</span></a>';
+    }).join('') || '<div class="muted" style="padding:6px 8px">Nada encontrado</div>';
+  });
+  var kw = /\b(local|function|end|if|then|else|elseif|for|do|while|return|nil|true|false|and|or|not|in|vec2|vec3|vec4|float|int|bool|uniform|static|const|struct|typedef|void|uint32_t|uint8_t|size_t|return|include|define)\b/g;
+  document.querySelectorAll('pre:not(.lang-json):not(.lang-text) code').forEach(function(c){
+    var h = c.innerHTML;
+    h = h.replace(/(--[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, '\u0001$1\u0002');
+    h = h.split(/(\u0001[^\u0002]*\u0002)/).map(function(s){
+      if(s.charAt(0) === '\u0001') return '<span class="com">' + s.slice(1, -1) + '</span>';
+      return s.replace(/(&quot;[^&]*&quot;|"[^"\n]*")/g, '<span class="str">$1</span>').replace(kw, '<span class="kw">$1</span>');
+    }).join('');
+    c.innerHTML = h;
+  });
+})();
+</script></body></html>

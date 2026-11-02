@@ -1,0 +1,8 @@
+{
+  "name": "Scanlines",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "shader",
+  "entry": "scanlines.glsl",
+  "description": "Darkens every other group of rows, like an old CRT."
+}
