@@ -17,6 +17,7 @@ PAGES = [
   ('tutorial-lua-tool', 'Lua tool'),
   ('tutorial-lua-window', 'Lua windows'),
   ('tutorial-native', 'Native plugin'),
+  ('tutorial-lua-vector', 'Vector objects'),
   ('concepts', 'Concepts'),
   ('cookbook', 'Cookbook'),
   ('reference', 'API reference'),
@@ -33,6 +34,7 @@ LANGS = {
     'titles': {
       'index': 'Primeiros passos', 'tutorial-shader': 'Efeito de shader', 'tutorial-lua-command': 'Comando Lua',
       'tutorial-lua-tool': 'Ferramenta Lua', 'tutorial-lua-window': 'Janelas Lua', 'tutorial-native': 'Plugin nativo',
+      'tutorial-lua-vector': 'Objetos vetoriais',
       'concepts': 'Conceitos', 'cookbook': 'Receitas', 'reference': 'Referência da API', 'effects': 'Efeitos embutidos',
       'formats': 'Padrões, temas, arquivos', 'versioning': 'Versionamento',
     },

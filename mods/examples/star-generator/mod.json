@@ -1,0 +1,8 @@
+{
+  "name": "Star Generator",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "lua",
+  "entry": "main.lua",
+  "description": "Adds a row of editable stars to a vector layer (vector support from Settings > Beta tools)."
+}

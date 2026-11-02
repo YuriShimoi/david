@@ -529,7 +529,7 @@ private:
     auto& s = h.settings();
     VecObject o;
     o.kind = EVecKind::Path;
-    o.name = _curve ? "Curve" : "Line";
+    o.name = _curve ? N_("Curve") : N_("Line");
     Subpath sp;
     if(!_curve && _nodes.size() == 2) {
       const Point &a = _nodes[0].p, &b = _nodes[1].p;
@@ -793,7 +793,7 @@ private:
         break;
       }
     }
-    o.name = k == EShapeKind::Free ? "Free polygon" : k == EShapeKind::Ellipse ? "Ellipse" : k == EShapeKind::Polygon ? "Polygon" : "Rectangle";
+    o.name = k == EShapeKind::Free ? N_("Free polygon") : k == EShapeKind::Ellipse ? N_("Ellipse") : k == EShapeKind::Polygon ? N_("Polygon") : N_("Rectangle");
     double w = std::max(1, s.brushSize);
     if(s.shapeDraw == 0) o.stroke = toolStroke(_primary, w, EStrokeAlign::Inside);
     else if(s.shapeDraw == 1) o.fill = VecPaint::solid(_primary);

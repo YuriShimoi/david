@@ -1,0 +1,114 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Objetos vetoriais · Mods do David</title><style>
+:root{--bg:#1A1A1A;--surface:#212121;--raised:#2A2A2A;--line:#44475A;--hover:#525568;--text:#FFFFFF;--muted:#A3A3A3;--accent:#8BE9FD;--good:#50FA7B;--warn:#FFB86C;--pink:#FF79C6;--purple:#BD93F9;--yellow:#F1FA8C}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.6 "Segoe UI",system-ui,sans-serif;display:flex}
+nav{width:260px;flex:none;background:var(--surface);height:100vh;position:sticky;top:0;overflow:auto;padding:20px 14px}
+nav .brand{font-weight:700;font-size:17px;margin:0 6px 14px;display:flex;gap:8px;align-items:center}
+nav .brand span{color:var(--accent)} nav .brand a.lang{margin-left:auto;font-size:12px;font-weight:400;padding:2px 8px;color:var(--muted)}
+nav input{width:100%;background:var(--raised);border:0;border-radius:6px;color:var(--text);padding:8px 10px;font:inherit;margin-bottom:14px}
+nav input:focus{outline:2px solid var(--accent)}
+nav .head{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 6px 6px}
+nav a{display:block;color:var(--text);text-decoration:none;padding:5px 8px;border-radius:6px}
+nav a:hover{background:var(--line)} nav a.on{color:var(--accent);background:var(--raised)}
+nav .toc a{font-size:13px;color:var(--muted);padding:2px 8px 2px 18px} nav .toc a.l3{padding-left:30px}
+#results a{font-size:14px} #results .where{display:block;color:var(--muted);font-size:12px}
+main{flex:1;min-width:0;padding:32px 48px 80px}
+article{max-width:820px}
+h1{font-size:28px;margin:0 0 16px} h2{font-size:20px;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)} h3{font-size:16px;margin:24px 0 8px}
+a{color:var(--accent)} p,ul,table,pre,figure{margin:0 0 16px}
+code{font-family:Consolas,"Cascadia Mono",monospace;font-size:13px;background:var(--raised);border-radius:4px;padding:1px 5px}
+pre{background:var(--surface);border-radius:8px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:13px;line-height:1.5}
+pre.sig{border-left:3px solid var(--accent)}
+table{border-collapse:collapse;width:100%} th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+figure{background:var(--surface);border-radius:8px;padding:10px} figure img{max-width:100%;border-radius:4px;display:block} figcaption{color:var(--muted);font-size:13px;margin-top:6px}
+section.api{background:var(--surface);border-radius:8px;padding:4px 16px 2px;margin:0 0 12px} section.api h3{margin-top:12px}
+.muted{color:var(--muted)} .kw{color:var(--pink)} .str{color:var(--yellow)} .com{color:#6272A4} .num{color:var(--purple)}
+@media(max-width:800px){body{display:block}nav{width:auto;height:auto;position:static}main{padding:20px}}
+</style></head><body>
+<nav><div class="brand">David <span>mods</span><a class="lang" href="../tutorial-lua-vector.html">EN</a></div><input id="search" placeholder="Buscar no guia" autocomplete="off"><div id="results"></div>
+<div class="head">Início</div><a href="index.html">Primeiros passos</a><a href="tutorial-shader.html">Efeito de shader</a><a href="tutorial-lua-command.html">Comando Lua</a><a href="tutorial-lua-tool.html">Ferramenta Lua</a><a href="tutorial-lua-window.html">Janelas Lua</a><div class="head">Referência</div><a href="tutorial-native.html">Plugin nativo</a><a href="tutorial-lua-vector.html" class="on">Objetos vetoriais</a><a href="concepts.html">Conceitos</a><a href="cookbook.html">Receitas</a><a href="reference.html">Referência da API</a><a href="effects.html">Efeitos embutidos</a><a href="formats.html">Padrões, temas, arquivos</a><a href="versioning.html">Versionamento</a><div id="toc"><div class="head">Nesta página</div><div class="toc"><a class="l2" href="#1-objetos-pelo-lua">1. Objetos pelo Lua</a><a class="l2" href="#2-mod-json">2. mod.json</a><a class="l2" href="#3-o-comando">3. O comando</a><a class="l2" href="#4-svg-de-entrada-e-sa-da">4. SVG de entrada e saída</a><a class="l2" href="#5-teste">5. Teste</a></div></div></nav>
+<main><article><h1 id="objetos-vetoriais-gerador-de-estrelas">Objetos vetoriais: Gerador de estrelas</h1>
+<p>Camadas vetoriais guardam objetos em vez de pixels: retângulos, elipses, polígonos e estrelas, caminhos e texto, cada um com preenchimento, linha e transformação. Eles ficam nítidos em qualquer zoom e continuam editáveis com as ferramentas Mouse e Nós. O suporte a vetores é um recurso beta: ative em <strong>Configurações &gt; Ferramentas beta &gt; Suporte a vetores</strong>.</p>
+<p>Este tutorial cria um comando que adiciona uma fileira de estrelas a uma camada vetorial. O mod pronto é <code>mods/examples/star-generator</code>.</p>
+<h2 id="1-objetos-pelo-lua">1. Objetos pelo Lua</h2>
+<p>Os objetos de uma camada vetorial são tabelas simples. <code>layer:objects()</code> lista todos (de baixo para cima), <code>layer:addObject(fields)</code> adiciona um no topo e devolve o id dele, <code>layer:setObject(id, fields)</code> muda alguns campos e <code>layer:removeObject(id)</code> apaga.</p>
+<table><thead><tr><th>Tipo</th><th>Campos</th></tr></thead><tbody><tr><td><code>rect</code></td><td><code>x</code>, <code>y</code>, <code>w</code>, <code>h</code>, <code>radius</code> (cantos arredondados)</td></tr><tr><td><code>ellipse</code></td><td><code>x</code>, <code>y</code>, <code>w</code>, <code>h</code> (a caixa em volta)</td></tr><tr><td><code>polygon</code></td><td><code>x</code>, <code>y</code>, <code>w</code>, <code>h</code>, <code>sides</code>, <code>inner</code> (abaixo de 1 vira estrela)</td></tr><tr><td><code>path</code></td><td><code>d</code>: dados de caminho SVG, como <code>"M0 0 L10 0 L10 10 Z"</code></td></tr><tr><td><code>text</code></td><td><code>text</code>, <code>font</code> (um arquivo de fonte), <code>size</code>, <code>x</code>, <code>y</code></td></tr></tbody></table>
+<p>Todos os tipos também aceitam <code>name</code>, <code>fill</code> e <code>stroke</code> (cores de <code>david.rgba</code>, ou <code>false</code> para nenhuma), <code>width</code> (a largura da linha), <code>opacity</code> (de 0 a 1) e <code>transform</code> (uma lista de transformações SVG, como <code>"rotate(45 50 50)"</code>).</p>
+<h2 id="2-mod-json">2. mod.json</h2>
+<pre class="lang-json"><code>{
+  "name": "Star Generator",
+  "version": "1.0.0",
+  "api": 1,
+  "kind": "lua",
+  "entry": "main.lua"
+}</code></pre>
+<h2 id="3-o-comando">3. O comando</h2>
+<pre class="lang-lua"><code>david.command{
+  id = "star-generator",
+  name = "Star Generator",
+  menu = "Mods/Vector",
+  params = {
+    { id = "count", label = "Stars", type = "int", min = 1, max = 20, default = 3 },
+    { id = "points", label = "Points", type = "int", min = 3, max = 24, default = 5 },
+    { id = "inner", label = "Inner radius %", type = "int", min = 10, max = 100, default = 45 },
+    { id = "color", label = "Fill", type = "color", default = 0 },
+  },
+  run = function(doc, p)
+    -- Draw on the active layer when it is a vector layer, else on a new one
+    local layer = doc:layer()
+    if not layer.isVector then layer = doc:addVectorLayer("Stars") end
+    -- One row across the middle of the image
+    local cell = doc.width / p.count
+    local size = math.min(cell, doc.height) * 0.8
+    for i = 0, p.count - 1 do
+      layer:addObject({
+        kind = "polygon",
+        name = "Star",
+        x = cell * i + (cell - size) / 2, y = (doc.height - size) / 2, w = size, h = size,
+        sides = p.points, inner = p.inner / 100,
+        fill = p.color,
+        stroke = david.rgba(0, 0, 0), width = math.max(1, size / 40),
+      })
+    end
+    david.log("star generator: " .. #layer:objects() .. " objects on " .. layer.name)
+  end,
+}</code></pre>
+<p><code>layer.isVector</code> diferencia uma camada vetorial de uma raster, e <code>doc:addVectorLayer(name)</code> adiciona uma acima da camada ativa. Tudo o que o comando adiciona (a camada e as estrelas) é um único passo de desfazer, como em qualquer outro comando.</p>
+<h2 id="4-svg-de-entrada-e-sa-da">4. SVG de entrada e saída</h2>
+<p><code>layer:svg()</code> devolve os objetos de uma camada vetorial como um documento SVG, e <code>layer:addSvg(text)</code> adiciona no topo os objetos de um documento SVG. É o jeito fácil de trazer formas feitas em outro lugar:</p>
+<pre class="lang-lua"><code>layer:addSvg('&lt;svg xmlns="http://www.w3.org/2000/svg"&gt;&lt;circle cx="20" cy="20" r="10" fill="red"/&gt;&lt;/svg&gt;')</code></pre>
+<p>Pela linha de comando, o <code>david-cli</code> também lê e grava SVG: <code>david-cli icon.svg --resize 256x256 -o icon.png</code> renderiza um SVG nítido em qualquer tamanho, e <code>david-cli sprite.png --trace pixel -o sprite.svg</code> transforma pixel art em uma forma por região de cor.</p>
+<h2 id="5-teste">5. Teste</h2>
+<p>Ative o suporte a vetores, abra qualquer imagem e rode <strong>Mods &gt; Vector &gt; Star Generator</strong>. Selecione as estrelas com a ferramenta Mouse para mover, redimensionar, girar ou mudar a cor, ou dobre-as com a ferramenta Nós (N).</p></article></main><script src="search-index.js"></script><script>
+(function(){
+  var box = document.getElementById('search'), res = document.getElementById('results'), toc = document.getElementById('toc');
+  box.addEventListener('input', function(){
+    var q = box.value.trim().toLowerCase();
+    if(!q){ res.innerHTML = ''; toc.style.display = ''; return; }
+    toc.style.display = 'none';
+    var words = q.split(/\s+/), hits = [];
+    DAVID_INDEX.forEach(function(e){
+      var t = (e.title + ' ' + e.text).toLowerCase(), score = 0;
+      for(var i = 0; i < words.length; i++){ if(t.indexOf(words[i]) < 0) return; score += e.title.toLowerCase().indexOf(words[i]) >= 0 ? 3 : 1; }
+      hits.push([score, e]);
+    });
+    hits.sort(function(a, b){ return b[0] - a[0]; });
+    res.innerHTML = hits.slice(0, 30).map(function(h){
+      var e = h[1];
+      return '<a href="' + e.url + '">' + e.title.replace(/</g, '&lt;') + '<span class="where">' + e.page + '</span></a>';
+    }).join('') || '<div class="muted" style="padding:6px 8px">Nada encontrado</div>';
+  });
+  var kw = /\b(local|function|end|if|then|else|elseif|for|do|while|return|nil|true|false|and|or|not|in|vec2|vec3|vec4|float|int|bool|uniform|static|const|struct|typedef|void|uint32_t|uint8_t|size_t|return|include|define)\b/g;
+  document.querySelectorAll('pre:not(.lang-json):not(.lang-text) code').forEach(function(c){
+    var h = c.innerHTML;
+    h = h.replace(/(--[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, '\u0001$1\u0002');
+    h = h.split(/(\u0001[^\u0002]*\u0002)/).map(function(s){
+      if(s.charAt(0) === '\u0001') return '<span class="com">' + s.slice(1, -1) + '</span>';
+      return s.replace(/(&quot;[^&]*&quot;|"[^"\n]*")/g, '<span class="str">$1</span>').replace(kw, '<span class="kw">$1</span>');
+    }).join('');
+    c.innerHTML = h;
+  });
+})();
+</script></body></html>

@@ -3,6 +3,21 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.0] - 2026-11-02
+
+### Added
+- Vector layers (beta, off until Settings > Beta tools > Vector support is on): objects instead of pixels, drawn by ThorVG and sharp at any zoom; Image > Vector > Pixel Preview shows the exact exported pixels. Image > Vector and the Layers panel add a vector layer (Ctrl+Alt+N).
+- On a vector layer, Shapes (all kinds, free polygon included), Line, Curve and Text make editable objects, with fill, line (inside, center or outside), dashes, arrow heads and text as glyph outlines.
+- The Mouse tool picks objects on vector layers: click, Shift-click or a marquee; drag to move, the corner nubs scale (Shift keeps the ratio), the round nub rotates (Shift snaps to 15°); arrow keys nudge and Del deletes. Its bar edits fill and line color, line width and position, opacity, corner radius, polygon sides and star points, and duplicates, deletes, reorders, groups, ungroups and turns objects into paths.
+- Node tool (N, vector layers): pick and drag nodes and their handles (marquee and Shift too), bend a segment by dragging it, double-click a segment to add a node, Del removes nodes; corner, smooth and symmetric nodes; open or close a path. Shapes turn into paths on their first node edit.
+- Raster tools, effects, fills and pastes on a vector layer ask first: rasterize the layer or paint on a new layer above it, with "Remember my choice". Layer > Rasterize Layer, and Merge Down into a vector layer, turn it into pixels (undoable).
+- SVG: open .svg files, Image > Vector > Import SVG into a vector layer and Export SVG of the whole image (vector layers as objects, raster layers as embedded PNG, each an Inkscape layer). Paths with every command (arcs included), basic shapes, groups, transforms, solid and gradient paint, strokes, opacity and `<use>` are read.
+- Copy and paste of vector objects between vector layers; SVG code on the clipboard pastes as objects.
+- Image > Vector > Trace Pixels: an exact trace of the active layer into a new vector layer, one shape per same-color region.
+- `.david` files keep vector layers as SVG next to their rendered PNG, so 1.1.0 still opens them (as pixels). Resize Image and Canvas Size scale and move the objects too.
+- Lua: `doc:addVectorLayer`, `layer.isVector`, `layer:objects`, `layer:addObject`, `layer:setObject`, `layer:removeObject`, `layer:svg`, `layer:addSvg`; the Star Generator example mod and a "Vector objects" page in the modding guide (English and Portuguese).
+- CLI: SVG input and output (`david-cli icon.svg --resize 256x256 -o icon.png`) and `--trace pixel`.
+
 ## [1.1.0] - 2026-11-02
 
 ### Added
