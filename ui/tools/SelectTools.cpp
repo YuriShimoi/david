@@ -285,7 +285,10 @@ public:
   void drag(ToolHost& h, const ToolInput& in) override {
     if(!_dragging) return;
     if(_corner >= 0) {
-      resize(in);
+      // Grid snap: the dragged corner lands on the grid
+      ToolInput at = in;
+      snapToGrid(h.settings(), at.x, at.y);
+      resize(at);
     } else if(_rotating) {
       Point c = center();
       double a = _startXf.angle + std::atan2(in.y - c.y, in.x - c.x) - _startAngle;
@@ -295,6 +298,21 @@ public:
       // Whole-pixel steps keep unrotated pixels crisp
       double mx = std::round(in.x - _sx), my = std::round(in.y - _sy);
       if(in.shift) { if(std::abs(mx) > std::abs(my)) my = 0; else mx = 0; }
+      // Grid snap: the box's top-left corner lands on the grid
+      if(h.settings().grid && h.settings().gridSnap) {
+        Point c[4];
+        Xform keep = _xf;
+        _xf = _startXf;
+        bool ok = box(h, c);
+        _xf = keep;
+        if(ok) {
+          double x0 = std::min({ c[0].x, c[1].x, c[2].x, c[3].x }) + mx, y0 = std::min({ c[0].y, c[1].y, c[2].y, c[3].y }) + my;
+          double sx = x0, sy = y0;
+          snapToGrid(h.settings(), sx, sy);
+          if(!in.shift || mx != 0) mx += sx - x0;
+          if(!in.shift || my != 0) my += sy - y0;
+        }
+      }
       _xf.dx = _startXf.dx + mx;
       _xf.dy = _startXf.dy + my;
     }

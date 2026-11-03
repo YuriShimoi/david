@@ -2,6 +2,7 @@
 #include "core/Document.h"
 #include "core/Layer.h"
 #include "core/Text.h"
+#include "core/VectorOps.h"
 #include "ui/CanvasNav.h"
 #include "ui/I18n.h"
 #include "ui/Icons.h"
@@ -59,6 +60,79 @@ namespace {
 
 std::vector<VecObject>& objectsOf(ToolHost& h) { return vectorTree(h.doc().active(), h.doc().active().frame()).objects; }
 
+}
+
+#pragma region [ Object actions ]
+const ObjOpInfo& objectOpInfo(EObjOp op) {
+  static const ObjOpInfo infos[] = {
+    { ICON_FA_TRASH, N_("Delete Objects"), 1 },
+    { ICON_FA_CLONE, N_("Duplicate Objects"), 1 },
+    { ICON_FA_ARROW_UP, N_("Bring Forward"), 1 },
+    { ICON_FA_ARROW_DOWN, N_("Send Backward"), 1 },
+    { ICON_FA_OBJECT_GROUP, N_("Group"), 2 },
+    { ICON_FA_OBJECT_UNGROUP, N_("Ungroup"), 1 },
+    { ICON_TB_FLIP_HORIZONTAL, N_("Flip Horizontal"), 1 },
+    { ICON_TB_FLIP_VERTICAL, N_("Flip Vertical"), 1 },
+    { ICON_TB_ROTATE_2, N_("Rotate 90° Left"), 1 },
+    { ICON_TB_ROTATE_CLOCKWISE_2, N_("Rotate 90° Right"), 1 },
+    { ICON_TB_VECTOR_SPLINE, N_("Object to Path"), 1 },
+    { ICON_PH_UNITE_SQUARE, N_("Union"), 2 },
+    { ICON_PH_SUBTRACT_SQUARE, N_("Subtract"), 2 },
+    { ICON_PH_INTERSECT_SQUARE, N_("Intersect"), 2 },
+    { ICON_PH_EXCLUDE_SQUARE, N_("Exclude"), 2 },
+  };
+  return infos[std::min(int(op), int(EObjOp::COUNT) - 1)];
+}
+
+std::string objectOpId(EObjOp op) {
+  static const char* ids[] = { "delete", "duplicate", "forward", "backward", "group", "ungroup", "flipH", "flipV", "rotateLeft",
+                               "rotateRight", "toPath", "union", "subtract", "intersect", "exclude" };
+  return std::string("object.") + ids[std::min(int(op), int(EObjOp::COUNT) - 1)];
+}
+
+bool objectOpReady(ToolHost& h, EObjOp op) {
+  if(!h.vectorMode()) return false;
+  auto& objs = objectsOf(h);
+  size_t n = 0;
+  for(uint64_t id : h.doc().selectedObjects)
+    for(auto& o : objs) if(o.id == id) { n++; break; }
+  return n >= objectOpInfo(op).minPicked;
+}
+
+void runObjectOp(ToolHost& h, EObjOp op) {
+  if(!objectOpReady(h, op)) return;
+  Document& doc = h.doc();
+  VectorChange ch(doc);
+  auto& objs = ch.tree().objects;
+  auto& sel = doc.selectedObjects;
+  bool changed = false;
+  switch(op) {
+    case EObjOp::Delete: changed = removeObjects(objs, sel); break;
+    case EObjOp::Duplicate: changed = duplicateObjects(objs, sel); break;
+    case EObjOp::Forward: changed = orderObjects(objs, sel, 1); break;
+    case EObjOp::Backward: changed = orderObjects(objs, sel, -1); break;
+    case EObjOp::Group: changed = groupObjects(objs, sel); break;
+    case EObjOp::Ungroup: changed = ungroupObjects(objs, sel); break;
+    case EObjOp::FlipH: changed = transformObjects(objs, sel, Affine::scaling(-1, 1)); break;
+    case EObjOp::FlipV: changed = transformObjects(objs, sel, Affine::scaling(1, -1)); break;
+    case EObjOp::RotateLeft: changed = transformObjects(objs, sel, Affine::rotation(-PI / 2)); break;
+    case EObjOp::RotateRight: changed = transformObjects(objs, sel, Affine::rotation(PI / 2)); break;
+    case EObjOp::ToPath: changed = objectsToPath(objs, sel); break;
+    case EObjOp::Union: changed = booleanObjects(objs, sel, EBoolOp::Union); break;
+    case EObjOp::Subtract: changed = booleanObjects(objs, sel, EBoolOp::Subtract); break;
+    case EObjOp::Intersect: changed = booleanObjects(objs, sel, EBoolOp::Intersect); break;
+    case EObjOp::Exclude: changed = booleanObjects(objs, sel, EBoolOp::Exclude); break;
+    case EObjOp::COUNT: break;
+  }
+  if(!changed) { ch.cancel(); return; }
+  ch.tree().touch();
+  const ObjOpInfo& info = objectOpInfo(op);
+  ch.commit(info.name, info.icon);
+}
+#pragma endregion
+
+namespace {
+
 // The four corners of an object's local bounds through its transform
 void corners(const VecObject& o, Point c[4]) {
   DRect r = bounds(o, false);
@@ -114,6 +188,12 @@ public:
     _start = p;
     if(int hd = handleAt(h, in); hd >= 0) { begin(h, hd == 4 ? EMode::Rotate : EMode::Scale, hd); return; }
     VecObject* hit = hitTest(objectsOf(h), p, 4 / h.nav().view.zoom);
+    // Double-click (Gravit): straight into editing the object's nodes
+    if(hit && in.doubleClick && hit->kind != EVecKind::Group && hit->kind != EVecKind::Text) {
+      sel = { hit->id };
+      h.useTool(ETool::Node);
+      return;
+    }
     if(hit) {
       bool picked = std::find(sel.begin(), sel.end(), hit->id) != sel.end();
       if(in.shift) {
@@ -136,6 +216,13 @@ public:
     if(_mode == EMode::Move) {
       double dx = p.x - _start.x, dy = p.y - _start.y;
       if(in.shift) { if(std::abs(dx) > std::abs(dy)) dy = 0; else dx = 0; }
+      // Grid snap: the selection box's top-left corner lands on the grid
+      if(h.settings().grid && h.settings().gridSnap && !_box.empty()) {
+        double x0 = _box.x0 + dx, y0 = _box.y0 + dy, sx = x0, sy = y0;
+        snapToGrid(h.settings(), sx, sy);
+        if(!in.shift || dx != 0) dx += sx - x0;
+        if(!in.shift || dy != 0) dy += sy - y0;
+      }
       m = Affine::translate(dx, dy);
     } else if(_mode == EMode::Rotate) {
       Point c{ (_box.x0 + _box.x1) / 2, (_box.y0 + _box.y1) / 2 };
@@ -143,7 +230,8 @@ public:
       if(in.shift) a = std::round(a / (PI / 12)) * (PI / 12);
       m = Affine::around(c, Affine::rotation(a));
     } else {
-      // The opposite corner stays; the dragged one follows the pointer
+      // The opposite corner stays; the dragged one follows the pointer (onto the grid when snap is on)
+      snapToGrid(h.settings(), p.x, p.y);
       Point fixed{ _handle == 1 || _handle == 2 ? _box.x0 : _box.x1, _handle >= 2 ? _box.y0 : _box.y1 };
       Point from{ _handle == 1 || _handle == 2 ? _box.x1 : _box.x0, _handle >= 2 ? _box.y1 : _box.y0 };
       double sx = std::abs(from.x - fixed.x) > 1e-9 ? (p.x - fixed.x) / (from.x - fixed.x) : 1;
@@ -195,7 +283,7 @@ public:
     if(ImGui::IsKeyPressed(ImGuiKey_DownArrow)) d.y = step;
     if(d.x || d.y) edit(h, N_("Move Objects"), [&](std::vector<VecObject>& objs, VecObject& o) { o.xf = Affine::translate(d.x, d.y) * o.xf; (void)objs; });
     // Del with no pixel selection deletes the objects (with one, Erase Selection asks first)
-    if(ImGui::IsKeyPressed(ImGuiKey_Delete, false) && !h.doc().hasSelection()) remove(h);
+    if(ImGui::IsKeyPressed(ImGuiKey_Delete, false) && !h.doc().hasSelection()) runObjectOp(h, EObjOp::Delete);
   }
 
   void overlay(ToolHost& h, ImDrawList* dl, const ToolInput& at) override {
@@ -233,88 +321,14 @@ public:
     }
   }
 
+  // The style lives in the Object window; the bar names what is picked
   void options(ToolHost& h) override {
     if(!h.vectorMode()) return;
     auto& objs = objectsOf(h);
     auto& sel = h.doc().selectedObjects;
     std::erase_if(sel, [&](uint64_t id) { return !findObject(objs, id); });
-    float dpi = h.dpi();
-    if(sel.empty()) {
-      ImGui::TextDisabled("%s", tr("Click objects to select them (Shift adds); drag on empty space for a marquee"));
-      endStyleEdit(h);
-      return;
-    }
-    VecObject& first = *findObject(objs, sel[0]);
-    ImGui::TextUnformatted(sel.size() == 1 ? utf8Name(first).c_str() : (std::to_string(sel.size()) + " " + tr("objects")).c_str());
-    ImGui::SameLine();
-    // Fill and line: a toggle and a color each; the line also has its width and position
-    bool fillOn = first.fill.visible();
-    if(ui::iconToggle("##fillon", ICON_TB_BUCKET_DROPLET, fillOn, tr("Fill"))) style(h, [&](VecObject& o) { o.fill = fillOn ? VecPaint::solid(o.fill.color) : VecPaint{}; });
-    ImGui::SameLine(0, 2 * dpi);
-    float fc[4];
-    ImVec4 fv = toVec(first.fill.type == EPaintType::Solid ? first.fill.color : 0xFF808080u);
-    fc[0] = fv.x; fc[1] = fv.y; fc[2] = fv.z; fc[3] = fv.w;
-    if(ImGui::ColorEdit4("##fill", fc, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_AlphaBar))
-      style(h, [&](VecObject& o) { o.fill = VecPaint::solid(fromVec(fc)); });
-    ImGui::SetItemTooltip("%s", tr("Fill color"));
-    ImGui::SameLine();
-    bool lineOn = first.stroke.paint.visible();
-    if(ui::iconToggle("##lineon", ICON_TB_LINE, lineOn, tr("Line")))
-      style(h, [&](VecObject& o) { o.stroke.paint = lineOn ? VecPaint::solid(o.stroke.paint.color) : VecPaint{}; if(lineOn && o.stroke.width <= 0) o.stroke.width = 1; });
-    ImGui::SameLine(0, 2 * dpi);
-    float lc[4];
-    ImVec4 lv = toVec(first.stroke.paint.type == EPaintType::Solid ? first.stroke.paint.color : 0xFF000000u);
-    lc[0] = lv.x; lc[1] = lv.y; lc[2] = lv.z; lc[3] = lv.w;
-    if(ImGui::ColorEdit4("##line", lc, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_AlphaBar))
-      style(h, [&](VecObject& o) { o.stroke.paint = VecPaint::solid(fromVec(lc)); });
-    ImGui::SetItemTooltip("%s", tr("Line color"));
-    ImGui::SameLine();
-    float w = float(first.stroke.width);
-    ImGui::SetNextItemWidth(70 * dpi);
-    if(ImGui::DragFloat("##width", &w, 0.25f, 0, 500, "%.1f px")) style(h, [&](VecObject& o) { o.stroke.width = std::max(0.f, w); });
-    ImGui::SetItemTooltip("%s", tr("Line width"));
-    ImGui::SameLine();
-    int align = int(first.stroke.align);
-    const char* aligns[] = { tr("Center"), tr("Inside"), tr("Outside") };
-    ImGui::SetNextItemWidth(90 * dpi);
-    if(ImGui::Combo("##align", &align, aligns, 3)) style(h, [&](VecObject& o) { o.stroke.align = EStrokeAlign(align); });
-    ImGui::SetItemTooltip("%s", tr("Line position"));
-    ImGui::SameLine();
-    float op = float(first.opacity * 100);
-    ImGui::SetNextItemWidth(80 * dpi);
-    if(ImGui::SliderFloat("##opacity", &op, 0, 100, "%.0f%%")) style(h, [&](VecObject& o) { o.opacity = op / 100; });
-    ImGui::SetItemTooltip("%s", tr("Opacity"));
-    if(sel.size() == 1 && first.kind == EVecKind::Rect) {
-      ImGui::SameLine();
-      float r = float(first.radius);
-      ImGui::SetNextItemWidth(70 * dpi);
-      if(ImGui::DragFloat("##radius", &r, 0.25f, 0, 2000, "%.0f")) style(h, [&](VecObject& o) { o.radius = std::max(0.f, r); });
-      ImGui::SetItemTooltip("%s", tr("Corner radius"));
-    }
-    if(sel.size() == 1 && first.kind == EVecKind::Polygon) {
-      ImGui::SameLine();
-      int sides = first.sides;
-      ImGui::SetNextItemWidth(70 * dpi);
-      if(ImGui::SliderInt("##sides", &sides, 3, 24)) style(h, [&](VecObject& o) { o.sides = sides; });
-      ImGui::SetItemTooltip("%s", tr("Sides"));
-      ImGui::SameLine();
-      float inner = float(first.inner * 100);
-      ImGui::SetNextItemWidth(70 * dpi);
-      if(ImGui::SliderFloat("##inner", &inner, 10, 100, "%.0f%%")) style(h, [&](VecObject& o) { o.inner = inner / 100; });
-      ImGui::SetItemTooltip("%s", tr("Star: inner radius"));
-    }
-    endStyleEdit(h);
-
-    // Order, grouping and conversion
-    ImGui::SameLine();
-    auto button = [&](const char* id, const char* ic, const char* tip) { ImGui::SameLine(0, 2 * dpi); return ui::iconButton(id, ic, { 0, 0 }, false, tr(tip)); };
-    if(button("##dup", ICON_FA_CLONE, N_("Duplicate"))) duplicate(h);
-    if(button("##del", ICON_FA_TRASH, N_("Delete (Del)"))) remove(h);
-    if(button("##up", ICON_FA_ARROW_UP, N_("Bring forward"))) order(h, 1);
-    if(button("##down", ICON_FA_ARROW_DOWN, N_("Send backward"))) order(h, -1);
-    if(button("##group", ICON_FA_OBJECT_GROUP, N_("Group"))) group(h);
-    if(button("##ungroup", ICON_FA_OBJECT_UNGROUP, N_("Ungroup"))) ungroup(h);
-    if(button("##path", ICON_TB_VECTOR_BEZIER_2, N_("Object to path"))) edit(h, N_("Object to Path"), [](std::vector<VecObject>&, VecObject& o) { toPath(o); });
+    if(sel.empty()) ImGui::TextDisabled("%s", tr("Click objects to select them (Shift adds); drag on empty space for a marquee"));
+    else ImGui::TextUnformatted(sel.size() == 1 ? utf8Name(*findObject(objs, sel[0])).c_str() : (std::to_string(sel.size()) + " " + tr("objects")).c_str());
   }
 
 private:
@@ -323,7 +337,7 @@ private:
   int _handle = -1;
   Point _start{}, _end{};
   DRect _box;
-  std::unique_ptr<VectorChange> _change, _style;
+  std::unique_ptr<VectorChange> _change;
   std::map<uint64_t, Affine> _startXf;
 
   DRect selectionBox(ToolHost& h) {
@@ -370,106 +384,6 @@ private:
     ch.tree().touch();
     ch.commit(name, icon);
   }
-
-  // Tool bar edits: live while a field is dragged, one step when it lets go
-  template<class F> void style(ToolHost& h, F fn) {
-    if(!_style) _style = std::make_unique<VectorChange>(h.doc());
-    for(uint64_t id : h.doc().selectedObjects)
-      if(VecObject* o = findObject(_style->tree().objects, id)) fn(*o);
-    vectorChanged(h.doc(), h.doc().active(), false);
-  }
-  void endStyleEdit(ToolHost& h) {
-    if(_style && !ImGui::IsAnyItemActive()) {
-      _style->commit(N_("Object Style"), icon);
-      _style.reset();
-      h.doc().onChanged();
-    }
-  }
-
-  void remove(ToolHost& h) {
-    VectorChange ch(h.doc());
-    auto& sel = h.doc().selectedObjects;
-    std::erase_if(ch.tree().objects, [&](const VecObject& o) { return std::find(sel.begin(), sel.end(), o.id) != sel.end(); });
-    ch.tree().touch();
-    ch.commit(N_("Delete Objects"), ICON_FA_TRASH);
-    sel.clear();
-  }
-
-  void duplicate(ToolHost& h) {
-    VectorChange ch(h.doc());
-    auto& objs = ch.tree().objects;
-    std::vector<uint64_t> copies;
-    size_t n = objs.size();
-    for(size_t i = 0; i < n; i++) {
-      if(std::find(h.doc().selectedObjects.begin(), h.doc().selectedObjects.end(), objs[i].id) == h.doc().selectedObjects.end()) continue;
-      VecObject c = objs[i];
-      renumber(c);
-      c.xf = Affine::translate(10, 10) * c.xf;
-      copies.push_back(c.id);
-      objs.push_back(std::move(c));
-    }
-    ch.tree().touch();
-    ch.commit(N_("Duplicate Objects"), ICON_FA_CLONE);
-    h.doc().selectedObjects = copies;
-  }
-
-  // Moves each selected object one place up (dir 1) or down (-1) in the stack
-  void order(ToolHost& h, int dir) {
-    VectorChange ch(h.doc());
-    auto& objs = ch.tree().objects;
-    auto picked = [&](size_t i) { auto& s = h.doc().selectedObjects; return std::find(s.begin(), s.end(), objs[i].id) != s.end(); };
-    if(dir > 0) { for(int i = int(objs.size()) - 2; i >= 0; i--) if(picked(i) && !picked(i + 1)) std::swap(objs[i], objs[i + 1]); }
-    else { for(size_t i = 1; i < objs.size(); i++) if(picked(i) && !picked(i - 1)) std::swap(objs[i], objs[i - 1]); }
-    ch.tree().touch();
-    ch.commit(dir > 0 ? N_("Bring Forward") : N_("Send Backward"), dir > 0 ? ICON_FA_ARROW_UP : ICON_FA_ARROW_DOWN);
-  }
-
-  void group(ToolHost& h) {
-    auto& sel = h.doc().selectedObjects;
-    if(sel.size() < 2) return;
-    VectorChange ch(h.doc());
-    auto& objs = ch.tree().objects;
-    VecObject g;
-    g.id = newObjectId();
-    g.kind = EVecKind::Group;
-    g.name = "Group";
-    size_t at = objs.size();
-    for(size_t i = 0; i < objs.size();) {
-      if(std::find(sel.begin(), sel.end(), objs[i].id) != sel.end()) {
-        at = std::min(at, i);
-        g.children.push_back(std::move(objs[i]));
-        objs.erase(objs.begin() + i);
-      } else i++;
-    }
-    objs.insert(objs.begin() + std::min(at, objs.size()), std::move(g));
-    sel = { objs[std::min(at, objs.size() - 1)].id };
-    ch.tree().touch();
-    ch.commit(N_("Group"), ICON_FA_OBJECT_GROUP);
-  }
-
-  // Children come out in place, carrying the group's transform and opacity
-  void ungroup(ToolHost& h) {
-    VectorChange ch(h.doc());
-    auto& objs = ch.tree().objects;
-    auto& sel = h.doc().selectedObjects;
-    std::vector<uint64_t> out;
-    for(size_t i = 0; i < objs.size();) {
-      if(objs[i].kind == EVecKind::Group && std::find(sel.begin(), sel.end(), objs[i].id) != sel.end()) {
-        VecObject g = std::move(objs[i]);
-        objs.erase(objs.begin() + i);
-        for(auto& c : g.children) {
-          c.xf = g.xf * c.xf;
-          c.opacity *= g.opacity;
-          out.push_back(c.id);
-          objs.insert(objs.begin() + i++, std::move(c));
-        }
-      } else i++;
-    }
-    if(out.empty()) return;
-    sel = out;
-    ch.tree().touch();
-    ch.commit(N_("Ungroup"), ICON_FA_OBJECT_UNGROUP);
-  }
 };
 #pragma endregion
 
@@ -480,7 +394,7 @@ private:
 // removes the picked ones. A shape becomes a path on its first edit.
 class NodeTool : public Tool {
 public:
-  NodeTool() : Tool(ETool::Node, ICON_TB_VECTOR_BEZIER_2, N_("Node"), ImGuiKey_N) {}
+  NodeTool() : Tool(ETool::Node, ICON_TB_VECTOR, N_("Node"), ImGuiKey_N) {}
 
   ECursor cursor(ToolHost& h, const ToolInput& at) override {
     if(!h.vectorMode()) return ECursor::Arrow;
@@ -513,6 +427,8 @@ public:
       if(sel.empty() || sel[0] != o->id) { sel = { o->id }; _nodes.clear(); }
       return;
     }
+    // Double-click on empty space goes back to the Mouse tool, the object still picked
+    if(in.doubleClick) { _nodes.clear(); h.useTool(ETool::Mouse); return; }
     if(!in.shift) _nodes.clear();
     _drag = EDrag::Marquee;
   }
@@ -522,6 +438,15 @@ public:
     if(_drag == EDrag::None || _drag == EDrag::Marquee || !_change) return;
     VecObject* o = target(_change->tree().objects, h);
     if(!o) return;
+    // Grid snap: the grabbed node or handle lands on the grid
+    const ToolSettings& st = h.settings();
+    if(st.grid && st.gridSnap && (_drag == EDrag::Nodes || _drag == EDrag::Handle) && _hit.sub < _startPaths.size() && _hit.node < _startPaths[_hit.sub].nodes.size()) {
+      const PathNode& n = _startPaths[_hit.sub].nodes[_hit.node];
+      Point w0 = o->xf.apply(_drag == EDrag::Nodes ? n.p : _hit.kind == EHit::HandleIn ? n.in : n.out);
+      Point w{ w0.x + _end.x - _start.x, w0.y + _end.y - _start.y };
+      snapToGrid(st, w.x, w.y);
+      _end = { _start.x + w.x - w0.x, _start.y + w.y - w0.y };
+    }
     Affine inv = o->xf.inverse();
     Point a = inv.apply(_start), b = inv.apply(_end);
     Point d{ b.x - a.x, b.y - a.y };
@@ -577,6 +502,13 @@ public:
   }
 
   bool busy() const override { return _drag != EDrag::None; }
+  // Esc lets go of the picked nodes, then goes back to the Mouse tool
+  bool onKey(ToolHost& h, ImGuiKey k) override {
+    if(k != ImGuiKey_Escape || !h.vectorMode() || _drag != EDrag::None) return false;
+    if(!_nodes.empty()) _nodes.clear();
+    else h.useTool(ETool::Mouse);
+    return true;
+  }
   void cancel(ToolHost&) override {
     if(_change) _change->cancel();
     _change.reset();

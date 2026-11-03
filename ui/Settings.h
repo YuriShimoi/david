@@ -45,6 +45,7 @@ struct Settings {
   bool showTools = true, showHistory = true, showLayers = true, showColors = true, showProbe = false;
   bool showTilePreview = false, showPalette = false;  // pixel-art windows, hidden by default
   bool showTimeline = false, showAnimPreview = false;  // animation windows, hidden by default
+  bool showObject = true;  // vector objects (with vector support on)
   // The tool strip, by tool name: its order (tools not listed follow in their built-in order) and the hidden ones
   std::vector<std::string> toolOrder, hiddenTools;
   AnimSettings anim;

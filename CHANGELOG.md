@@ -3,6 +3,22 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.1] - Unreleased
+
+### Added
+- Vector tool row (vector layers): Mouse, Node, Shapes, Pen (the Curve tool), Line, Pencil and Text lead the tool bar, followed by flip, rotate 90°, group, boolean operations, order, object to path, duplicate and delete.
+- Object window (vector support on; opens as a tab next to Colors, View > Vector > Object): name, position, size and angle, corner radius, sides and star points, opacity, fill, and border color, width, position, ends, corners and dash. The Mouse tool's style bar moved here.
+- Boolean operations on picked objects: Union, Subtract, Intersect and Exclude make one path with the bottom object's look; curves are refitted and corners kept (Clipper2).
+- The Pencil on a vector layer draws a freehand path, fitted to smooth curves when the button lets go.
+- Double-click an object with the Mouse tool to edit its nodes; Esc (or a double-click on empty canvas) goes back to the Mouse tool.
+- Ctrl+G groups and Ctrl+Shift+G ungroups objects.
+
+### Changed
+- The Node tool has its own icon (it shared the Curve tool's).
+
+### Fixed
+- Grid snap now applies while moving or resizing with Move Selected Pixels and Move Selection, while moving or scaling vector objects, and while dragging nodes and handles.
+
 ## [1.2.0] - 2026-11-02
 
 ### Added

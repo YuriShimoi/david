@@ -32,4 +32,4 @@ C++20, CMake, Ninja and vcpkg. Windows: `build.cmd win-release`. Linux: `VCPKG_R
 
 ## License
 MIT, see [LICENSE](LICENSE).
-David uses SDL3, Dear ImGui, glad, GLM, libpng, zlib, libwebp, stb, FreeType, HarfBuzz, Fontconfig (Linux), Lua with sol2, nlohmann/json, CLI11, ThorVG and pugixml, each under its own license. Icons: Font Awesome Free (SIL OFL 1.1), Tabler Icons and Phosphor Icons (MIT), licenses in `assets/fonts/`.
+David uses SDL3, Dear ImGui, glad, GLM, libpng, zlib, libwebp, stb, FreeType, HarfBuzz, Fontconfig (Linux), Lua with sol2, nlohmann/json, CLI11, ThorVG, pugixml and Clipper2, each under its own license. Icons: Font Awesome Free (SIL OFL 1.1), Tabler Icons and Phosphor Icons (MIT), licenses in `assets/fonts/`.

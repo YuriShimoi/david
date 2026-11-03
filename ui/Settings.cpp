@@ -44,7 +44,7 @@ static json toJson(const Settings& s) {
   j["newImage"] = { { "width", s.newW }, { "height", s.newH } };
   j["windows"] = { { "tools", s.showTools }, { "history", s.showHistory }, { "layers", s.showLayers }, { "colors", s.showColors }, { "penProbe", s.showProbe },
                     { "tilePreview", s.showTilePreview }, { "palette", s.showPalette },
-                    { "timeline", s.showTimeline }, { "animPreview", s.showAnimPreview } };
+                    { "timeline", s.showTimeline }, { "animPreview", s.showAnimPreview }, { "object", s.showObject } };
   const AnimSettings& a = s.anim;
   j["animation"] = {
     { "onion", a.onion }, { "onionBefore", a.onionBefore }, { "onionAfter", a.onionAfter }, { "onionMerged", a.onionMerged },
@@ -128,6 +128,7 @@ bool Settings::load(const std::string& path, std::string& error) {
     read(*w, "colors", showColors); read(*w, "penProbe", showProbe);
     read(*w, "tilePreview", showTilePreview); read(*w, "palette", showPalette);
     read(*w, "timeline", showTimeline); read(*w, "animPreview", showAnimPreview);
+    read(*w, "object", showObject);
   }
   if(auto a = j.find("animation"); a != j.end() && a->is_object()) {
     AnimSettings& s = anim;

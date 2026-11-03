@@ -24,6 +24,7 @@
 #include "core/io/Png.h"
 #include "core/io/Svg.h"
 #include "core/Vector.h"
+#include "core/VectorOps.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -950,9 +951,76 @@ static void testVector() {
   CHECK(vectorTreeOf(l, 0)->objects.size() == 2 && (l.get(52, 40) >> 24) > 200);
 }
 
+static void testVectorOps() {
+  auto rect = [](double x, double y, double w, double h) {
+    VecObject o;
+    o.id = newObjectId(); o.kind = EVecKind::Rect; o.x = x; o.y = y; o.w = w; o.h = h;
+    o.fill = VecPaint::solid(BLACK);
+    return o;
+  };
+  auto allStraight = [](const Subpath& s) {
+    for(auto& n : s.nodes) if(n.in.x != n.p.x || n.in.y != n.p.y || n.out.x != n.p.x || n.out.y != n.p.y) return false;
+    return true;
+  };
+  // Union of two overlapping rectangles: one straight-edged outline with 8 corners
+  std::vector<VecObject> objs = { rect(0, 0, 40, 30), rect(20, 10, 40, 30) };
+  std::vector<uint64_t> sel = { objs[0].id, objs[1].id };
+  CHECK(booleanObjects(objs, sel, EBoolOp::Union) && objs.size() == 1 && sel.size() == 1 && sel[0] == objs[0].id);
+  CHECK(objs[0].kind == EVecKind::Path && objs[0].paths.size() == 1 && objs[0].paths[0].nodes.size() == 8 && allStraight(objs[0].paths[0]));
+  CHECK(hitTest(objs, { 5, 5 }, 0) && hitTest(objs, { 55, 35 }, 0) && !hitTest(objs, { 55, 5 }, 0));
+  // Subtract: the bottom one minus the top one; Intersect: the shared part
+  objs = { rect(0, 0, 40, 30), rect(20, 10, 40, 30) };
+  sel = { objs[0].id, objs[1].id };
+  CHECK(booleanObjects(objs, sel, EBoolOp::Subtract) && hitTest(objs, { 5, 5 }, 0) && !hitTest(objs, { 30, 20 }, 0) && !hitTest(objs, { 55, 35 }, 0));
+  objs = { rect(0, 0, 40, 30), rect(20, 10, 40, 30) };
+  sel = { objs[0].id, objs[1].id };
+  CHECK(booleanObjects(objs, sel, EBoolOp::Intersect) && objs[0].paths[0].nodes.size() == 4);
+  DRect ib = bounds(objs[0], true);
+  CHECK(std::abs(ib.x0 - 20) < 0.01 && std::abs(ib.x1 - 40) < 0.01 && std::abs(ib.y0 - 10) < 0.01 && std::abs(ib.y1 - 30) < 0.01);
+  // Two circles: the lens they share keeps its curves, with a corner at each crossing
+  VecObject c1, c2;
+  c1.id = newObjectId(); c1.kind = EVecKind::Ellipse; c1.w = c1.h = 40; c1.fill = VecPaint::solid(BLACK);
+  c2 = c1; c2.id = newObjectId(); c2.x = 20;
+  objs = { c1, c2 };
+  sel = { c1.id, c2.id };
+  CHECK(booleanObjects(objs, sel, EBoolOp::Intersect));
+  int corners = 0;
+  for(auto& n : objs[0].paths[0].nodes) corners += n.type == ENodeType::Corner;
+  CHECK(corners == 2 && objs[0].paths[0].nodes.size() <= 8 && !allStraight(objs[0].paths[0]));
+  // Exclude of two equal shapes leaves nothing: no change
+  objs = { rect(0, 0, 10, 10), rect(0, 0, 10, 10) };
+  sel = { objs[0].id, objs[1].id };
+  CHECK(!booleanObjects(objs, sel, EBoolOp::Exclude) && objs.size() == 2);
+  // Curve fit of a sampled circle: few smooth nodes, close to the circle
+  std::vector<Point> pts;
+  for(int i = 0; i < 200; i++) { double a = i * 2 * 3.14159265358979 / 200; pts.push_back({ 50 + 30 * std::cos(a), 50 + 30 * std::sin(a) }); }
+  Subpath fit = fitCurve(pts, true, 0.1);
+  bool smooth = fit.closed && fit.nodes.size() >= 4 && fit.nodes.size() <= 8;
+  for(auto& n : fit.nodes) smooth = smooth && n.type == ENodeType::Smooth;
+  double worst = 0;
+  for(Point q : flatten(fit, 0.01)) worst = std::max(worst, std::abs(std::hypot(q.x - 50, q.y - 50) - 30));
+  CHECK(smooth && worst < 0.2);
+  // An open zigzag keeps its corners
+  Subpath zig = fitCurve({ { 0, 0 }, { 5, 5 }, { 10, 10 }, { 15, 5 }, { 20, 0 } }, false, 0.1);
+  CHECK(zig.nodes.size() == 3 && zig.nodes[1].type == ENodeType::Corner && allStraight(zig));
+  // Flip, group and ungroup
+  objs = { rect(0, 0, 10, 10), rect(20, 0, 10, 10) };
+  sel = { objs[0].id };
+  CHECK(transformObjects(objs, sel, Affine::scaling(-1, 1)) && objs[0].xf.a == -1 && std::abs(bounds(objs[0], true).x0) < 1e-9);
+  sel = { objs[0].id, objs[1].id };
+  CHECK(groupObjects(objs, sel) && objs.size() == 1 && objs[0].kind == EVecKind::Group && sel.size() == 1);
+  CHECK(ungroupObjects(objs, sel) && objs.size() == 2 && sel.size() == 2);
+}
+
 int main(int argc, char** argv) {
   auto dir = std::filesystem::temp_directory_path() / "david-tests";
   std::filesystem::create_directories(dir);
+  // --only vector-ops: just the checks of the work in progress
+  if(argc > 2 && std::string(argv[1]) == "--only" && std::string(argv[2]) == "vector-ops") {
+    testVectorOps();
+    std::printf(s_failed ? "%d FAILED\n" : "all passed\n", s_failed);
+    return s_failed ? 1 : 0;
+  }
   testUndoAcrossTiles();
   testSparseUndo();
   testHistoryCap();
@@ -981,6 +1049,7 @@ int main(int argc, char** argv) {
   testFormats(dir);
   testAnimation(dir);
   testVector();
+  testVectorOps();
   for(int i = 1; i < argc; i++) testExternal(argv[i], dir);
   std::printf(s_failed ? "%d FAILED\n" : "all passed\n", s_failed);
   return s_failed ? 1 : 0;

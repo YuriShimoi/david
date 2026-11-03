@@ -8,6 +8,7 @@
 #include "ui/I18n.h"
 #include "ui/Icons.h"
 #include "ui/ToolIcons.h"
+#include "ui/tools/VectorTools.h"
 #include "ui/Widgets.h"
 #include <glad/glad.h>
 #include <imgui_impl_opengl3.h>
@@ -309,6 +310,17 @@ void App::setupCommands() {
     view({ "view.reset" + std::to_string(i), names[i - 5], ICON_FA_ARROWS_TO_DOT, { CTRL | SHIFT | (ImGuiKey_F1 + i - 1) }, [this, i, flag] { *flag = true; _resetWindow = i; } });
   }
   view({ "view.probe", N_("Pen Probe"), ICON_FA_PEN_NIB, {}, [this] { _cfg.showProbe = !_cfg.showProbe; } });
+  // Vector objects
+  view({ "view.object", N_("Object"), ICON_TB_VECTOR, {}, [this] { _cfg.showObject = !_cfg.showObject; } });
+  view({ "view.reset13", N_("Reset Object Window"), ICON_FA_ARROWS_TO_DOT, {}, [this] { _cfg.showObject = true; _resetWindow = 13; } });
+  for(int i = 0; i < int(EObjOp::COUNT); i++) {
+    EObjOp op = EObjOp(i);
+    const ObjOpInfo& info = objectOpInfo(op);
+    std::vector<ImGuiKeyChord> keys;
+    if(op == EObjOp::Group) keys = { CTRL | ImGuiKey_G };
+    if(op == EObjOp::Ungroup) keys = { CTRL | SHIFT | ImGuiKey_G };
+    add({ objectOpId(op), info.name, info.icon, keys, [this, op] { runObjectOp(*this, op); }, [this, op] { return objectOpReady(*this, op); } });
+  }
   view({ "view.tilePreview", N_("Tile Preview"), ICON_FA_TABLE_CELLS_LARGE, {}, [this] { _cfg.showTilePreview = !_cfg.showTilePreview; } });
   view({ "view.palette", N_("Palette"), ICON_FA_SWATCHBOOK, {}, [this] { _cfg.showPalette = !_cfg.showPalette; } });
   // Animation
@@ -617,6 +629,7 @@ void App::frame() {
   drawPaletteWindow();
   drawTimeline();
   drawAnimPreview();
+  drawObjectWindow();
   drawPenProbe();
   if(_gesture == EGesture::Tool) tool().tick(*this);
   drawModWindows();
@@ -660,7 +673,7 @@ void App::frame() {
   if(!_shotPath.empty()) {
     _shotFrames++;
     if(!_selftestDir.empty()) selftestStep(_shotFrames);
-    if(_shotFrames >= (_selftestDir.empty() ? 20 : 320) && !_reloadAt && !_round2 && !_round3 && !_round4 && !_round5 && !_round6 && !_round7 && !_round8 && !_round9) {
+    if(_shotFrames >= (_selftestDir.empty() ? 20 : 320) && !_reloadAt && !_round2 && !_round3 && !_round4 && !_round5 && !_round6 && !_round7 && !_round8 && !_round9 && !_round10) {
       if(!_selftestDir.empty()) {
         std::ofstream out(pathFromUtf8(_selftestDir + "/selftest.txt"));
         out << _selftestLog;
@@ -771,6 +784,7 @@ void App::drawMenu() {
       _commands.menuItem("file.exportSvg");
       ImGui::Separator();
       _commands.menuItem("view.vectorPixels", _cfg.vectorPixels);
+      _commands.menuItem("view.object", _cfg.showObject);
       ImGui::EndMenu();
     }
     _commands.menuItem("view.probe", _cfg.showProbe);

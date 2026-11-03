@@ -24,7 +24,7 @@ static uint32_t fromVec(const float* v) {
 static const char* panelKey(int which) {
   switch(which) {
     case 6: return "history"; case 7: return "layers"; case 9: return "tilepreview"; case 10: return "palette";
-    case 11: return "timeline"; case 12: return "animpreview"; default: return "colors";
+    case 11: return "timeline"; case 12: return "animpreview"; case 13: return "object"; default: return "colors";
   }
 }
 
@@ -51,6 +51,7 @@ void App::floatingPlace(int which) {
     case 7: pos = { p.x + s.x - w - m, p.y + s.y - lowH - m }; size = { w, lowH }; break;                              // Layers
     case 9: case 10: pos = { p.x + s.x - (w + m) * 2, p.y + m + (which - 9) * (w + m) }; size = { w, w }; break;       // Tile preview, palette
     case 12: pos = { p.x + s.x - (w + m) * 3, p.y + m }; size = { w, w }; break;                                       // Animation preview
+    case 13: pos = { p.x + s.x - (w + m) * 2, p.y + m }; size = { w, colorsH }; break;                                 // Object, left of Colors
     case 11: {                                                                                                          // Timeline, along the bottom
       float th = 190 * _dpi, left = 64 * _dpi;
       pos = { p.x + left, p.y + s.y - th - m }; size = { std::max(300 * _dpi, s.x - left - (w + m) * 2 - m), th };
@@ -61,6 +62,12 @@ void App::floatingPlace(int which) {
   ImGui::SetNextWindowDockID(0, ImGuiCond_Always);
   ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
   ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+}
+
+// Where Colors is docked now (the default layout's node is only known in the session that built it)
+static ImGuiID colorsDock() {
+  ImGuiWindow* w = ImGui::FindWindowByName("###colors");
+  return w && w->DockId ? w->DockId : 0;
 }
 
 // The title shows the name next to the icon when the panel was wide enough last frame
@@ -81,8 +88,11 @@ bool App::beginPanel(int which, const char* icon, const char* name, const char* 
     }
     if(_nodeTimeline) ImGui::SetNextWindowDockID(_nodeTimeline, ImGuiCond_Always);
   } else if(reset) {
-    ImGuiID nodes[] = { _nodeHistory, _nodeLayers, _nodeColors, _nodeLayers, _nodeLayers, 0, _nodeLayers };
-    if(ImGuiID node = nodes[which - 6]) ImGui::SetNextWindowDockID(node, ImGuiCond_Always);
+    ImGuiID nodes[] = { _nodeHistory, _nodeLayers, _nodeColors, _nodeLayers, _nodeLayers, 0, _nodeLayers, _nodeColors };
+    if(ImGuiID node = which == 13 ? colorsDock() : nodes[which - 6]) ImGui::SetNextWindowDockID(node, ImGuiCond_Always);
+  } else if(which == 13) {
+    // The Object window first opens as a tab next to Colors
+    if(ImGuiID node = colorsDock()) ImGui::SetNextWindowDockID(node, ImGuiCond_FirstUseEver);
   } else if(which >= 9 && which != 11 && _nodeLayers) {
     // The pixel-art windows first open as tabs next to Layers
     ImGui::SetNextWindowDockID(_nodeLayers, ImGuiCond_FirstUseEver);
@@ -171,6 +181,13 @@ void App::drawToolBar() {
   ImGui::PushStyleColor(ImGuiCol_WindowBg, _theme.bg);
   float h = ImGui::GetFrameHeight() + 8 * _dpi;
   if(ImGui::BeginViewportSideBar("##toolbar", ImGui::GetMainViewport(), ImGuiDir_Up, h, flags)) {
+    // On a vector layer the vector tools and object actions lead, then the current tool's own options
+    if(vectorRowShown()) {
+      vectorToolRow();
+      ImGui::SameLine();
+      ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical, 1);
+      ImGui::SameLine();
+    }
     tool().options(*this);
     // Options every tool shares, after a divider
     ImGui::SameLine();

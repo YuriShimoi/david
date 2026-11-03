@@ -2,6 +2,7 @@
 #include "core/Vector.h"
 #include "ui/tools/Tool.h"
 #include <memory>
+#include <string>
 
 namespace david {
 
@@ -21,5 +22,19 @@ private:
 
 // The line a drawing tool gives a new object: the color and width, inside the shape like the raster tools
 VecStroke toolStroke(uint32_t color, double width, EStrokeAlign align);
+
+// Actions on the picked objects of the active vector layer (the vector tool row, the Object window, keys)
+enum class EObjOp : uint8_t {
+  Delete, Duplicate, Forward, Backward, Group, Ungroup, FlipH, FlipV, RotateLeft, RotateRight, ToPath,
+  Union, Subtract, Intersect, Exclude, COUNT
+};
+struct ObjOpInfo { const char* icon; const char* name; size_t minPicked; };
+const ObjOpInfo& objectOpInfo(EObjOp op);
+// The command id ("object.union", ...)
+std::string objectOpId(EObjOp op);
+// Enough objects are picked for it
+bool objectOpReady(ToolHost& h, EObjOp op);
+// One History step; nothing when the op changes nothing
+void runObjectOp(ToolHost& h, EObjOp op);
 
 }

@@ -65,7 +65,7 @@ void App::pointer(int phase, float wx, float wy, int button, bool pen, int click
     // Tools that paint pixels ask before touching a vector layer; vector-aware ones make objects there
     static const ETool safe[] = { ETool::Mouse, ETool::Zoom, ETool::Pan, ETool::Picker, ETool::RectSelect, ETool::Lasso, ETool::EllipseSelect,
                                   ETool::PolyLasso, ETool::MagicWand, ETool::MoveSelection, ETool::Node };
-    static const ETool drawing[] = { ETool::Shapes, ETool::Line, ETool::Curve, ETool::Text };
+    static const ETool drawing[] = { ETool::Shapes, ETool::Line, ETool::Curve, ETool::Text, ETool::Pencil };
     bool harmless = std::find(std::begin(safe), std::end(safe), id) != std::end(safe);
     bool vectorTool = vectorMode() && std::find(std::begin(drawing), std::end(drawing), id) != std::end(drawing);
     if(_doc->active().kind == ELayerKind::Vector && !harmless && !vectorTool && !rasterGuard(nullptr)) { _hover = in; return; }

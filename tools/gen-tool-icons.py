@@ -108,6 +108,11 @@ ICONS = [
   ('TB_TABLE_IMPORT', 'tb', 'table-import'),
   ('TB_TABLE_EXPORT', 'tb', 'table-export'),
   ('TB_REPLACE', 'tb', 'replace'),
+  # Vector tool row (1.2.1)
+  ('TB_VECTOR', 'tb', 'vector'),
+  ('TB_FLIP_VERTICAL', 'tb', 'flip-vertical'),
+  ('TB_VECTOR_SPLINE', 'tb', 'vector-spline'),
+  ('TB_LAYERS_INTERSECT', 'tb', 'layers-intersect'),
   ('DAVID_LOGO', 'svg', 'assets/icons/david-mono.svg'),
 ]
 

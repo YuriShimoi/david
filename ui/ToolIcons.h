@@ -3,7 +3,7 @@
 #pragma once
 
 #define ICON_MIN_DAVID 0xEA00
-#define ICON_MAX_DAVID 0xEA5C
+#define ICON_MAX_DAVID 0xEA60
 
 #define ICON_TB_POINTER "\xee\xa8\x80"
 #define ICON_TB_MARQUEE_2 "\xee\xa8\x81"
@@ -97,4 +97,8 @@
 #define ICON_TB_TABLE_IMPORT "\xee\xa9\x99"
 #define ICON_TB_TABLE_EXPORT "\xee\xa9\x9a"
 #define ICON_TB_REPLACE "\xee\xa9\x9b"
-#define ICON_DAVID_LOGO "\xee\xa9\x9c"
+#define ICON_TB_VECTOR "\xee\xa9\x9c"
+#define ICON_TB_FLIP_VERTICAL "\xee\xa9\x9d"
+#define ICON_TB_VECTOR_SPLINE "\xee\xa9\x9e"
+#define ICON_TB_LAYERS_INTERSECT "\xee\xa9\x9f"
+#define ICON_DAVID_LOGO "\xee\xa9\xa0"
