@@ -36,6 +36,7 @@ A theme is one JSON file in the `themes` folder (built in) or your config folder
 | `good`, `warn`, `bad` | Status colors |
 | `canvasBg`, `checkerA`, `checkerB` | Around the image, and the transparency checkerboard |
 | `selectionAnts`, `nub` | Marching ants and on-canvas handles |
+| `grid` | The grid lines (View > Pixel Art > Grid); a theme without it uses the accent, faint |
 | `radius`, `borderWidth`, `spacing`, `fontSize`, `font` | Corner radius, border width, item spacing, UI font size and font file |
 
 ## The .david file

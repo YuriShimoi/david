@@ -13,7 +13,7 @@ struct Theme {
   std::string name = "Dev";
   ImVec4 bg, surface, raised, line, hover, pressed, text, textMuted;
   ImVec4 accent, accentHover, onAccent, good, warn, bad;
-  ImVec4 canvasBg, checkerA, checkerB, selectionAnts, nub;
+  ImVec4 canvasBg, checkerA, checkerB, selectionAnts, nub, grid;
   float radius = 0, borderWidth = 0, padding = 6, spacing = 6, fontSize = 15;
   std::string font;
 

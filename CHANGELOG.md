@@ -12,9 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The Pencil on a vector layer draws a freehand path, fitted to smooth curves when the button lets go.
 - Double-click an object with the Mouse tool to edit its nodes; Esc (or a double-click on empty canvas) goes back to the Mouse tool.
 - Ctrl+G groups and Ctrl+Shift+G ungroups objects.
+- Select All (Ctrl+A) on a vector layer picks all its objects (with the Mouse tool); Deselect lets them go.
+- Picking the Node tool on a raster layer moves to the nearest vector layer above it, else the topmost one below, else adds a new vector layer.
+- The status bar shows the selection's box: its top-left corner and size (the picked objects' box on a vector layer).
+- Theme token `grid` for the grid lines; themes without it use the accent, faint.
 
 ### Changed
 - The Node tool has its own icon (it shared the Curve tool's).
+- The grid is fainter by default (the accent at 30% opacity).
 
 ### Fixed
 - Grid snap now applies while moving or resizing with Move Selected Pixels and Move Selection, while moving or scaling vector objects, and while dragging nodes and handles.

@@ -213,6 +213,7 @@ void App::refreshTheme() {
   if(_cfg.systemAccent && platform::systemAccent(accent)) {
     ImVec4 a = { (accent & 0xFF) / 255.f, ((accent >> 8) & 0xFF) / 255.f, ((accent >> 16) & 0xFF) / 255.f, 1 };
     _theme.accent = _theme.nub = a;
+    _theme.grid = { a.x, a.y, a.z, _theme.grid.w };
     _theme.accentHover = { a.x + (1 - a.x) * 0.15f, a.y + (1 - a.y) * 0.15f, a.z + (1 - a.z) * 0.15f, 1 };
     ImVec4 white = hexToColor("#FFFFFF"), dark = hexToColor("#1A1A1A");
     _theme.onAccent = contrastRatio(white, a) >= contrastRatio(dark, a) ? white : dark;
@@ -290,7 +291,7 @@ void App::setupCommands() {
   add({ "edit.pasteLayer", N_("Paste into New Layer"), ICON_FA_PASTE, { CTRL | SHIFT | ImGuiKey_V }, [this] { pasteImage(EPaste::NewLayer); } });
   add({ "edit.pasteImage", N_("Paste into New Image"), ICON_FA_PASTE, { CTRL | ALT | ImGuiKey_V }, [this] { pasteImage(EPaste::NewImage); } });
   add({ "edit.selectAll", N_("Select All"), ICON_FA_OBJECT_UNGROUP, { CTRL | ImGuiKey_A }, [this] { selectionOp("all"); } });
-  add({ "edit.deselect", N_("Deselect"), ICON_FA_XMARK, { CTRL | ImGuiKey_D }, [this] { selectionOp("none"); }, hasSel });
+  add({ "edit.deselect", N_("Deselect"), ICON_FA_XMARK, { CTRL | ImGuiKey_D }, [this] { selectionOp("none"); }, [this] { return _doc->hasSelection() || (vectorMode() && !_doc->selectedObjects.empty()); } });
   add({ "edit.invertSel", N_("Invert Selection"), ICON_FA_CIRCLE_HALF_STROKE, { CTRL | ImGuiKey_I }, [this] { selectionOp("invert"); } });
   add({ "edit.erase", N_("Erase Selection"), ICON_FA_ERASER, { ImGuiKey_Delete }, [this] { selectionOp("erase"); }, hasSel });
   add({ "edit.fill", N_("Fill Selection"), ICON_FA_FILL_DRIP, {}, [this] { selectionOp("fill"); }, hasSel });
@@ -658,7 +659,7 @@ void App::frame() {
   copy(colors.checkerA, _theme.checkerA);
   copy(colors.checkerB, _theme.checkerB);
   copy(colors.grid, ImVec4(0.5f, 0.5f, 0.5f, 0.45f));
-  copy(colors.customGrid, ImVec4(_theme.accent.x, _theme.accent.y, _theme.accent.z, 0.55f));
+  copy(colors.customGrid, _theme.grid);
   _nav.view.checkerSize = std::round(_cfg.checkerSize * _dpi);
   _nav.view.gridZoom = _cfg.gridZoom;
   const auto& t = _cfg.tools;
@@ -840,12 +841,23 @@ void App::drawStatusBar() {
       ImGui::TextDisabled(ICON_FA_EXPAND);
       ImGui::SameLine();
       ImGui::Text("%d × %d", _doc->width(), _doc->height());
-      if(_doc->hasSelection()) {
+      // The box the selection covers: its top-left corner and size (the picked objects' box on a vector layer)
+      DRect box;
+      if(vectorMode() && !_doc->selectedObjects.empty()) {
+        const auto& objs = vectorTree(_doc->active(), _doc->active().frame()).objects;
+        for(uint64_t id : _doc->selectedObjects) if(const VecObject* o = findObject(objs, id)) box.add(bounds(*o, true));
+      } else if(_doc->hasSelection()) {
         IRect b = _doc->selection->bounds();
+        box = { double(b.x0), double(b.y0), double(b.x1 + 1), double(b.y1 + 1) };
+      }
+      if(!box.empty()) {
         ImGui::SameLine(0, 24 * _dpi);
         ImGui::TextDisabled(ICON_FA_CROP_SIMPLE);
+        ImGui::SetItemTooltip("%s", tr("Selection: position and size"));
         ImGui::SameLine();
-        ImGui::Text("%d × %d", b.width(), b.height());
+        ImGui::Text("%g, %g", std::round(box.x0 * 10) / 10, std::round(box.y0 * 10) / 10);
+        ImGui::SameLine(0, 12 * _dpi);
+        ImGui::Text("%g × %g", std::round(box.width() * 10) / 10, std::round(box.height() * 10) / 10);
       }
 
       // Zoom controls on the right

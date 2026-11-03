@@ -1150,11 +1150,33 @@ void App::selftestStep(int frame) {
         use(ETool::Mouse);
         break;
       }
-      case 11:
+      case 11: {
         writeShot(_selftestDir + "/p10-object-window.png");
+        // Select All on a vector layer picks every object
+        use(ETool::Pencil);
+        _doc->selectedObjects.clear();
+        _commands.run("edit.selectAll");
+        check("Select All on a vector layer picks its objects", _doc->selectedObjects.size() == objects().size() && objects().size() == 2 && tool().id == ETool::Mouse);
+        _commands.run("edit.deselect");
+        check("Deselect lets them go", _doc->selectedObjects.empty());
+        // The Node tool from a raster layer: the vector layer above, else the topmost below, else a new one
+        _doc->activeLayer = 0;
+        use(ETool::Node);
+        check("the Node tool moves to the vector layer above", _doc->activeLayer == 1);
+        use(ETool::Mouse);
+        _commands.run("layer.add");
+        _doc->activeLayer = 2;
+        use(ETool::Node);
+        check("else to the topmost vector layer below", _doc->activeLayer == 1);
+        use(ETool::Mouse);
+        setDocument(Document::blank(50, 50, WHITE));
+        use(ETool::Node);
+        check("else it adds a vector layer", _doc->layers.size() == 2 && _doc->active().kind == ELayerKind::Vector);
+        check("the grid has its own theme color", _theme.grid.w < 0.5f && _theme.grid.w > 0);
         _cfg.betaVector = false;
         _round10 = 0;
         break;
+      }
     }
   }
 
