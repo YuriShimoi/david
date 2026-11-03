@@ -65,7 +65,7 @@ void App::pointer(int phase, float wx, float wy, int button, bool pen, int click
     // Tools that paint pixels ask before touching a vector layer; vector-aware ones make objects there
     static const ETool safe[] = { ETool::Mouse, ETool::Zoom, ETool::Pan, ETool::Picker, ETool::RectSelect, ETool::Lasso, ETool::EllipseSelect,
                                   ETool::PolyLasso, ETool::MagicWand, ETool::MoveSelection, ETool::Node };
-    static const ETool drawing[] = { ETool::Shapes, ETool::Line, ETool::Curve, ETool::Text };
+    static const ETool drawing[] = { ETool::Shapes, ETool::Line, ETool::Curve, ETool::Text, ETool::Pencil };
     bool harmless = std::find(std::begin(safe), std::end(safe), id) != std::end(safe);
     bool vectorTool = vectorMode() && std::find(std::begin(drawing), std::end(drawing), id) != std::end(drawing);
     if(_doc->active().kind == ELayerKind::Vector && !harmless && !vectorTool && !rasterGuard(nullptr)) { _hover = in; return; }
@@ -197,6 +197,16 @@ void App::selectTool(int index) {
   commitTool();
   _previousTool = _tool;
   _tool = index;
+  // The Node tool works on a vector layer: the nearest one above the active layer, else the topmost below
+  // it, else a new one
+  if(_tools[index]->id == ETool::Node && _cfg.betaVector && _doc->active().kind != ELayerKind::Vector) {
+    int n = int(_doc->layers.size()), found = -1;
+    for(int i = _doc->activeLayer + 1; i < n && found < 0; i++) if(_doc->layers[i]->kind == ELayerKind::Vector) found = i;
+    for(int i = n - 1; i >= 0 && found < 0; i--) if(_doc->layers[i]->kind == ELayerKind::Vector) found = i;
+    if(found >= 0) { _doc->activeLayer = found; _doc->onChanged(); }
+    else _commands.run("layer.addVector");
+  }
+  _tools[index]->activate(*this);
 }
 
 bool App::vectorMode() { return _cfg.betaVector && _doc->active().kind == ELayerKind::Vector; }
@@ -261,6 +271,17 @@ void App::drawOverlays() {
 void App::selectionOp(const char* what) {
   Document& doc = *_doc;
   int w = doc.width(), h = doc.height();
+  // On a vector layer Select All and Deselect pick the objects (shown by the Mouse tool)
+  if(vectorMode() && (!std::strcmp(what, "all") || !std::strcmp(what, "none"))) {
+    doc.selectedObjects.clear();
+    if(!std::strcmp(what, "all")) {
+      for(auto& o : vectorTree(doc.active(), doc.active().frame()).objects)
+        if(o.visible && !o.locked) doc.selectedObjects.push_back(o.id);
+      if(tool().id != ETool::Mouse && tool().id != ETool::Node) useTool(ETool::Mouse);
+      return;
+    }
+    if(!doc.hasSelection()) return;
+  }
   if(!std::strcmp(what, "all")) {
     auto m = std::make_unique<Mask>(w, h);
     m->fillAll();

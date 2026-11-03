@@ -8,6 +8,7 @@
 #include "ui/I18n.h"
 #include "ui/Icons.h"
 #include "ui/ToolIcons.h"
+#include "ui/tools/VectorTools.h"
 #include "ui/Widgets.h"
 #include <glad/glad.h>
 #include <imgui_impl_opengl3.h>
@@ -212,6 +213,7 @@ void App::refreshTheme() {
   if(_cfg.systemAccent && platform::systemAccent(accent)) {
     ImVec4 a = { (accent & 0xFF) / 255.f, ((accent >> 8) & 0xFF) / 255.f, ((accent >> 16) & 0xFF) / 255.f, 1 };
     _theme.accent = _theme.nub = a;
+    _theme.grid = { a.x, a.y, a.z, _theme.grid.w };
     _theme.accentHover = { a.x + (1 - a.x) * 0.15f, a.y + (1 - a.y) * 0.15f, a.z + (1 - a.z) * 0.15f, 1 };
     ImVec4 white = hexToColor("#FFFFFF"), dark = hexToColor("#1A1A1A");
     _theme.onAccent = contrastRatio(white, a) >= contrastRatio(dark, a) ? white : dark;
@@ -289,7 +291,7 @@ void App::setupCommands() {
   add({ "edit.pasteLayer", N_("Paste into New Layer"), ICON_FA_PASTE, { CTRL | SHIFT | ImGuiKey_V }, [this] { pasteImage(EPaste::NewLayer); } });
   add({ "edit.pasteImage", N_("Paste into New Image"), ICON_FA_PASTE, { CTRL | ALT | ImGuiKey_V }, [this] { pasteImage(EPaste::NewImage); } });
   add({ "edit.selectAll", N_("Select All"), ICON_FA_OBJECT_UNGROUP, { CTRL | ImGuiKey_A }, [this] { selectionOp("all"); } });
-  add({ "edit.deselect", N_("Deselect"), ICON_FA_XMARK, { CTRL | ImGuiKey_D }, [this] { selectionOp("none"); }, hasSel });
+  add({ "edit.deselect", N_("Deselect"), ICON_FA_XMARK, { CTRL | ImGuiKey_D }, [this] { selectionOp("none"); }, [this] { return _doc->hasSelection() || (vectorMode() && !_doc->selectedObjects.empty()); } });
   add({ "edit.invertSel", N_("Invert Selection"), ICON_FA_CIRCLE_HALF_STROKE, { CTRL | ImGuiKey_I }, [this] { selectionOp("invert"); } });
   add({ "edit.erase", N_("Erase Selection"), ICON_FA_ERASER, { ImGuiKey_Delete }, [this] { selectionOp("erase"); }, hasSel });
   add({ "edit.fill", N_("Fill Selection"), ICON_FA_FILL_DRIP, {}, [this] { selectionOp("fill"); }, hasSel });
@@ -309,6 +311,17 @@ void App::setupCommands() {
     view({ "view.reset" + std::to_string(i), names[i - 5], ICON_FA_ARROWS_TO_DOT, { CTRL | SHIFT | (ImGuiKey_F1 + i - 1) }, [this, i, flag] { *flag = true; _resetWindow = i; } });
   }
   view({ "view.probe", N_("Pen Probe"), ICON_FA_PEN_NIB, {}, [this] { _cfg.showProbe = !_cfg.showProbe; } });
+  // Vector objects
+  view({ "view.object", N_("Object"), ICON_TB_VECTOR, {}, [this] { _cfg.showObject = !_cfg.showObject; } });
+  view({ "view.reset13", N_("Reset Object Window"), ICON_FA_ARROWS_TO_DOT, {}, [this] { _cfg.showObject = true; _resetWindow = 13; } });
+  for(int i = 0; i < int(EObjOp::COUNT); i++) {
+    EObjOp op = EObjOp(i);
+    const ObjOpInfo& info = objectOpInfo(op);
+    std::vector<ImGuiKeyChord> keys;
+    if(op == EObjOp::Group) keys = { CTRL | ImGuiKey_G };
+    if(op == EObjOp::Ungroup) keys = { CTRL | SHIFT | ImGuiKey_G };
+    add({ objectOpId(op), info.name, info.icon, keys, [this, op] { runObjectOp(*this, op); }, [this, op] { return objectOpReady(*this, op); } });
+  }
   view({ "view.tilePreview", N_("Tile Preview"), ICON_FA_TABLE_CELLS_LARGE, {}, [this] { _cfg.showTilePreview = !_cfg.showTilePreview; } });
   view({ "view.palette", N_("Palette"), ICON_FA_SWATCHBOOK, {}, [this] { _cfg.showPalette = !_cfg.showPalette; } });
   // Animation
@@ -617,6 +630,7 @@ void App::frame() {
   drawPaletteWindow();
   drawTimeline();
   drawAnimPreview();
+  drawObjectWindow();
   drawPenProbe();
   if(_gesture == EGesture::Tool) tool().tick(*this);
   drawModWindows();
@@ -645,7 +659,7 @@ void App::frame() {
   copy(colors.checkerA, _theme.checkerA);
   copy(colors.checkerB, _theme.checkerB);
   copy(colors.grid, ImVec4(0.5f, 0.5f, 0.5f, 0.45f));
-  copy(colors.customGrid, ImVec4(_theme.accent.x, _theme.accent.y, _theme.accent.z, 0.55f));
+  copy(colors.customGrid, _theme.grid);
   _nav.view.checkerSize = std::round(_cfg.checkerSize * _dpi);
   _nav.view.gridZoom = _cfg.gridZoom;
   const auto& t = _cfg.tools;
@@ -660,7 +674,7 @@ void App::frame() {
   if(!_shotPath.empty()) {
     _shotFrames++;
     if(!_selftestDir.empty()) selftestStep(_shotFrames);
-    if(_shotFrames >= (_selftestDir.empty() ? 20 : 320) && !_reloadAt && !_round2 && !_round3 && !_round4 && !_round5 && !_round6 && !_round7 && !_round8 && !_round9) {
+    if(_shotFrames >= (_selftestDir.empty() ? 20 : 320) && !_reloadAt && !_round2 && !_round3 && !_round4 && !_round5 && !_round6 && !_round7 && !_round8 && !_round9 && !_round10) {
       if(!_selftestDir.empty()) {
         std::ofstream out(pathFromUtf8(_selftestDir + "/selftest.txt"));
         out << _selftestLog;
@@ -771,6 +785,7 @@ void App::drawMenu() {
       _commands.menuItem("file.exportSvg");
       ImGui::Separator();
       _commands.menuItem("view.vectorPixels", _cfg.vectorPixels);
+      _commands.menuItem("view.object", _cfg.showObject);
       ImGui::EndMenu();
     }
     _commands.menuItem("view.probe", _cfg.showProbe);
@@ -826,12 +841,23 @@ void App::drawStatusBar() {
       ImGui::TextDisabled(ICON_FA_EXPAND);
       ImGui::SameLine();
       ImGui::Text("%d × %d", _doc->width(), _doc->height());
-      if(_doc->hasSelection()) {
+      // The box the selection covers: its top-left corner and size (the picked objects' box on a vector layer)
+      DRect box;
+      if(vectorMode() && !_doc->selectedObjects.empty()) {
+        const auto& objs = vectorTree(_doc->active(), _doc->active().frame()).objects;
+        for(uint64_t id : _doc->selectedObjects) if(const VecObject* o = findObject(objs, id)) box.add(bounds(*o, true));
+      } else if(_doc->hasSelection()) {
         IRect b = _doc->selection->bounds();
+        box = { double(b.x0), double(b.y0), double(b.x1 + 1), double(b.y1 + 1) };
+      }
+      if(!box.empty()) {
         ImGui::SameLine(0, 24 * _dpi);
         ImGui::TextDisabled(ICON_FA_CROP_SIMPLE);
+        ImGui::SetItemTooltip("%s", tr("Selection: position and size"));
         ImGui::SameLine();
-        ImGui::Text("%d × %d", b.width(), b.height());
+        ImGui::Text("%g, %g", std::round(box.x0 * 10) / 10, std::round(box.y0 * 10) / 10);
+        ImGui::SameLine(0, 12 * _dpi);
+        ImGui::Text("%g × %g", std::round(box.width() * 10) / 10, std::round(box.height() * 10) / 10);
       }
 
       // Zoom controls on the right

@@ -1,4 +1,6 @@
 #include "ui/tools/Tool.h"
+#include "ui/tools/VectorTools.h"
+#include "core/VectorOps.h"
 #include "core/Composite.h"
 #include "core/Document.h"
 #include "core/Draw.h"
@@ -199,12 +201,18 @@ private:
 #pragma endregion
 
 #pragma region [ Pencil ]
-// One aliased pixel, Bresenham between events
+// One aliased pixel, Bresenham between events. On a vector layer it draws a freehand path instead: the
+// pointer's trail, fitted to Bezier curves when the button lets go.
 class PencilTool : public Tool {
 public:
   PencilTool() : Tool(ETool::Pencil, ICON_TB_PENCIL, N_("Pencil"), ImGuiKey_P) {}
 
   void down(ToolHost& h, const ToolInput& in) override {
+    if(h.vectorMode()) {
+      _trail = { { in.x, in.y } };
+      _ink = h.color(in.button != SDL_BUTTON_RIGHT);
+      return;
+    }
     _stroke = makeStroke(h, EInk::Paint, in, true);
     _x = int(std::floor(in.x)); _y = int(std::floor(in.y));
     _path.clear();
@@ -212,6 +220,14 @@ public:
   }
 
   void drag(ToolHost& h, const ToolInput& in) override {
+    if(!_trail.empty()) {
+      // Points closer than half a screen pixel add nothing
+      Point p{ in.x, in.y }, last = _trail.back();
+      if(std::hypot(p.x - last.x, p.y - last.y) * h.nav().view.zoom < 0.5) return;
+      _trail.push_back(p);
+      _live.set(h, trailObject(h, false));
+      return;
+    }
     if(!_stroke) return;
     line(h, int(std::floor(in.x)), int(std::floor(in.y)));
   }
@@ -219,14 +235,34 @@ public:
   void up(ToolHost& h, const ToolInput&) override { commit(h); }
 
   void commit(ToolHost& h) override {
+    if(!_trail.empty()) {
+      if(_live.active()) {
+        _live.set(h, trailObject(h, true));
+        _live.commit(h, name, icon);
+      }
+      _trail.clear();
+      return;
+    }
     if(!_stroke) return;
     if(auto edit = _stroke->finish(name, icon)) h.doc().history.push(h.doc(), std::move(edit));
     _stroke.reset();
   }
 
-  bool busy() const override { return bool(_stroke); }
+  bool busy() const override { return bool(_stroke) || !_trail.empty(); }
+
+  void cancel(ToolHost& h) override {
+    if(_trail.empty()) { commit(h); return; }
+    _live.cancel(h);
+    _trail.clear();
+  }
 
   void options(ToolHost& h) override {
+    if(h.vectorMode()) {
+      ImGui::SetNextItemWidth(80 * h.dpi());
+      ImGui::DragInt("##width", &h.settings().brushSize, 0.2f, 1, 500, "%d px");
+      ImGui::SetItemTooltip("%s", tr("Line width"));
+      return;
+    }
     toggle(ICON_TB_STAIRS_UP, h.settings().shading, N_("Shading ink (steps along the palette; right click steps back)"));
   }
 
@@ -244,7 +280,28 @@ public:
 
 private:
   std::unique_ptr<Stroke> _stroke;
+  // Vector layers: the pointer's trail and the path it makes
+  std::vector<Point> _trail;
+  uint32_t _ink = 0;
+  LiveObject _live;
   int _x = 0, _y = 0;
+
+  // The trail as a round-capped line: raw while drawing, fitted (within 1.5 screen px) at the end
+  VecObject trailObject(ToolHost& h, bool fit) {
+    VecObject o;
+    o.kind = EVecKind::Path;
+    o.name = N_("Pencil");
+    if(fit) o.paths = { fitCurve(_trail, false, 1.5 / h.nav().view.zoom) };
+    else {
+      Subpath sp;
+      for(Point p : _trail) sp.nodes.push_back(PathNode::corner(p));
+      o.paths = { sp };
+    }
+    o.stroke = toolStroke(_ink, std::max(1, h.settings().brushSize), EStrokeAlign::Center);
+    o.stroke.cap = ECap::Round;
+    o.stroke.join = EJoin::Round;
+    return o;
+  }
   std::vector<std::pair<int, int>> _path;  // the last pixels, for the pixel-perfect rule
 
   void plot(ToolHost& h, int x, int y) {

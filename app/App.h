@@ -6,6 +6,7 @@
 #include <map>
 #include "core/Color.h"
 #include "core/Text.h"
+#include "core/Vector.h"
 #include "core/Document.h"
 #include "core/Effect.h"
 #include "core/Paint.h"
@@ -134,7 +135,7 @@ private:
   std::string _notice;
   int _settingsSeen = 0;
   uint64_t _reloadAt = 0;
-  int _round2 = 0, _round3 = 0, _round4 = 0, _round5 = 0, _round6 = 0, _round7 = 0, _round8 = 0, _round9 = 0;
+  int _round2 = 0, _round3 = 0, _round4 = 0, _round5 = 0, _round6 = 0, _round7 = 0, _round8 = 0, _round9 = 0, _round10 = 0;
   int _probeGray = 0;  // a screen value one self-test step compares with the next
   bool _selftestMods = false;  // the self-test turns the example mods on
   #pragma endregion
@@ -320,6 +321,11 @@ private:
   void importSvg(const std::string& path, bool newDocument);
   void exportSvg(const std::string& path);
   void traceLayer();
+  // The vector tool row on the tool bar, and the Object window (the picked objects' look and place)
+  std::unique_ptr<VectorChange> _objectStyle;  // a field edit in progress: live, one step when it lets go
+  bool vectorRowShown();
+  void vectorToolRow();
+  void drawObjectWindow();
   // Mod windows: open ones by "<mod>/<id>" are in _cfg.modWindows; a window whose draw failed shows its error
   std::map<std::string, std::string> _modWindowError;
   bool modWindowOpen(const std::string& key) const;

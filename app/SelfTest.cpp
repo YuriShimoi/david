@@ -1040,13 +1040,149 @@ void App::selftestStep(int frame) {
           check("with vector support off the Node tool hides", hidden && !vectorMode());
         }
         _round9 = 0;
+        _round10 = frame;
         break;
+    }
+  }
+
+  // Round 10 (1.2.1): grid snap while moving, the vector tool row, boolean union, double-click into the Node
+  // tool and Esc back, the vector Pencil, the Object window
+  if(_round10 && frame > _round10) {
+    int f = frame - _round10;
+    auto at = [&](double x, double y) { return toScreen(x, y); };
+    auto objects = [&]() -> std::vector<VecObject>& { return vectorTree(_doc->active(), _doc->activeFrame).objects; };
+    auto rect = [](double x, double y, double w, double h) {
+      VecObject o;
+      o.id = newObjectId(); o.kind = EVecKind::Rect; o.x = x; o.y = y; o.w = w; o.h = h;
+      o.fill = VecPaint::solid(RED);
+      return o;
+    };
+    switch(f) {
+      case 1: {
+        _cfg.betaVector = true;
+        setDocument(Document::blank(200, 150, WHITE));
+        _nav.actualSize();
+        _nav.centerOn(100, 75);
+        _commands.run("layer.addVector");
+        {
+          VectorChange ch(*_doc);
+          ch.tree().objects = { rect(20, 20, 40, 30), rect(40, 30, 40, 30) };
+          ch.tree().touch();
+          ch.commit("Add", "");
+        }
+        use(ETool::Mouse);
+        _doc->selectedObjects = { objects()[0].id, objects()[1].id };
+        check("the vector tool row shows on a vector layer", vectorRowShown());
+        _commands.run("object.union");
+        auto& objs = objects();
+        bool one = objs.size() == 1 && objs[0].kind == EVecKind::Path && objs[0].paths.size() == 1;
+        DRect b = one ? bounds(objs[0], true) : DRect{};
+        check("Union makes one path of the two shapes", one && std::abs(b.x0 - 20) < 0.1 && std::abs(b.x1 - 80) < 0.1 && std::abs(b.y1 - 60) < 0.1
+              && objs[0].paths[0].nodes.size() == 8 && _doc->history.at(_doc->history.count() - 1).name == "Union");
+        // Grid snap: the moved box lands on the 10 px grid
+        _cfg.tools.grid = _cfg.tools.gridSnap = true;
+        _cfg.tools.gridW = _cfg.tools.gridH = 10;
+        _cfg.tools.gridX = _cfg.tools.gridY = 0;
+        ImVec2 a = at(30.5, 30.5), e = at(43.5, 34.5);
+        drag(a.x, a.y, e.x, e.y, SDL_BUTTON_LEFT);
+        break;
+      }
+      case 3: {
+        DRect b = objects().empty() ? DRect{} : bounds(objects()[0], true);
+        check("moving objects snaps them to the grid", !b.empty() && std::abs(b.x0 - 30) < 0.01 && std::abs(b.y0 - 20) < 0.01);
+        _cfg.tools.grid = _cfg.tools.gridSnap = false;
+        // Double-click an object: straight into the Node tool
+        ImVec2 p = at(50, 40);
+        push(SDL_EVENT_MOUSE_MOTION, p.x, p.y, 0);
+        SDL_Event e{};
+        e.button.x = p.x; e.button.y = p.y; e.button.button = SDL_BUTTON_LEFT; e.button.clicks = 2;
+        e.type = SDL_EVENT_MOUSE_BUTTON_DOWN; e.button.down = true;
+        SDL_PushEvent(&e);
+        e.type = SDL_EVENT_MOUSE_BUTTON_UP; e.button.down = false;
+        SDL_PushEvent(&e);
+        break;
+      }
+      case 5:
+        check("double-clicking an object opens the Node tool on it", tool().id == ETool::Node && _doc->selectedObjects.size() == 1);
+        tool().onKey(*this, ImGuiKey_Escape);
+        check("Esc goes back to the Mouse tool", tool().id == ETool::Mouse);
+        // The vector Pencil: a freehand path
+        use(ETool::Pencil);
+        {
+          ImVec2 a = at(120, 100), m = at(150, 120), e = at(180, 100);
+          push(SDL_EVENT_MOUSE_MOTION, a.x, a.y, 0);
+          push(SDL_EVENT_MOUSE_BUTTON_DOWN, a.x, a.y, SDL_BUTTON_LEFT);
+          for(int i = 1; i <= 20; i++) {
+            float t = i / 20.f;
+            push(SDL_EVENT_MOUSE_MOTION, a.x + (e.x - a.x) * t, a.y + (m.y - a.y) * 4 * t * (1 - t), 0);
+          }
+          push(SDL_EVENT_MOUSE_BUTTON_UP, e.x, e.y, SDL_BUTTON_LEFT);
+        }
+        break;
+      case 7: {
+        auto& objs = objects();
+        bool path = objs.size() == 2 && objs[1].kind == EVecKind::Path && objs[1].paths.size() == 1 && !objs[1].paths[0].closed && objs[1].stroke.paint.visible();
+        check("the Pencil on a vector layer draws a fitted path", path && objs[1].paths[0].nodes.size() >= 2 && objs[1].paths[0].nodes.size() <= 6);
+        use(ETool::Mouse);
+        _doc->selectedObjects = { objs[0].id };
+        break;
+      }
+      case 9: {
+        ImGuiWindow* w = ImGui::FindWindowByName("###object");
+        ImGuiWindow* c = ImGui::FindWindowByName("###colors");
+        check("the Object window opens docked with Colors", w && c && (_cfg.floatingWindows || (w->DockId && w->DockId == c->DockId)));
+        ImGui::FocusWindow(w);
+        // Raster layers too: Move Selection snaps the moved box to the grid
+        _doc->activeLayer = 0;
+        _commands.run("edit.selectAll");
+        use(ETool::MoveSelection);
+        _cfg.tools.grid = _cfg.tools.gridSnap = true;
+        ImVec2 a = at(50, 50), e = at(53, 56);
+        drag(a.x, a.y, e.x, e.y, SDL_BUTTON_LEFT);
+        break;
+      }
+      case 10: {
+        tool().commit(*this);
+        IRect b = _doc->selection->bounds();
+        check("Move Selection snaps to the grid", b.x0 == 0 && b.y0 == 10);
+        _cfg.tools.grid = _cfg.tools.gridSnap = false;
+        _doc->activeLayer = 1;
+        use(ETool::Mouse);
+        break;
+      }
+      case 11: {
+        writeShot(_selftestDir + "/p10-object-window.png");
+        // Select All on a vector layer picks every object
+        use(ETool::Pencil);
+        _doc->selectedObjects.clear();
+        _commands.run("edit.selectAll");
+        check("Select All on a vector layer picks its objects", _doc->selectedObjects.size() == objects().size() && objects().size() == 2 && tool().id == ETool::Mouse);
+        _commands.run("edit.deselect");
+        check("Deselect lets them go", _doc->selectedObjects.empty());
+        // The Node tool from a raster layer: the vector layer above, else the topmost below, else a new one
+        _doc->activeLayer = 0;
+        use(ETool::Node);
+        check("the Node tool moves to the vector layer above", _doc->activeLayer == 1);
+        use(ETool::Mouse);
+        _commands.run("layer.add");
+        _doc->activeLayer = 2;
+        use(ETool::Node);
+        check("else to the topmost vector layer below", _doc->activeLayer == 1);
+        use(ETool::Mouse);
+        setDocument(Document::blank(50, 50, WHITE));
+        use(ETool::Node);
+        check("else it adds a vector layer", _doc->layers.size() == 2 && _doc->active().kind == ELayerKind::Vector);
+        check("the grid has its own theme color", _theme.grid.w < 0.5f && _theme.grid.w > 0);
+        _cfg.betaVector = false;
+        _round10 = 0;
+        break;
+      }
     }
   }
 
   // One round on its own: it starts at once, and the rest is skipped
   if(_selftestOnly) {
-    if(frame == 3) { if(_selftestOnly == 8) _round8 = frame; else if(_selftestOnly == 9) _round9 = frame; }
+    if(frame == 3) { if(_selftestOnly == 8) _round8 = frame; else if(_selftestOnly == 9) _round9 = frame; else if(_selftestOnly == 10) _round10 = frame; }
     return;
   }
   switch(frame) {

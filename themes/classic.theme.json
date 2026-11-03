@@ -19,7 +19,8 @@
     "checkerA": "#FFFFFF",
     "checkerB": "#CCCCCC",
     "selectionAnts": "#000000",
-    "nub": "#0078D4"
+    "nub": "#0078D4",
+    "grid": "#0078D44D"
   },
   "shape": {
     "radius": 4,

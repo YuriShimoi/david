@@ -36,6 +36,7 @@ Um tema é um arquivo JSON na pasta `themes` (nativos) ou na pasta `themes` da s
 | `good`, `warn`, `bad` | Cores de status |
 | `canvasBg`, `checkerA`, `checkerB` | Ao redor da imagem e o xadrez de transparência |
 | `selectionAnts`, `nub` | Formigas marchantes e alças na tela |
+| `grid` | As linhas da grade (Exibir > Pixel Art > Grade); um tema sem ele usa a cor de destaque, suave |
 | `radius`, `borderWidth`, `spacing`, `fontSize`, `font` | Raio dos cantos, largura da borda, espaçamento entre itens, tamanho da fonte da interface e arquivo de fonte |
 
 ## O arquivo .david

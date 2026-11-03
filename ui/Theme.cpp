@@ -48,7 +48,7 @@ const std::vector<Theme::ColorToken>& Theme::colorTokens() {
     { "accent", &Theme::accent }, { "accentHover", &Theme::accentHover }, { "onAccent", &Theme::onAccent },
     { "good", &Theme::good }, { "warn", &Theme::warn }, { "bad", &Theme::bad },
     { "canvasBg", &Theme::canvasBg }, { "checkerA", &Theme::checkerA }, { "checkerB", &Theme::checkerB },
-    { "selectionAnts", &Theme::selectionAnts }, { "nub", &Theme::nub },
+    { "selectionAnts", &Theme::selectionAnts }, { "nub", &Theme::nub }, { "grid", &Theme::grid },
   };
   return list;
 }
@@ -70,7 +70,7 @@ Theme Theme::dev() {
   t.accent = hexToColor("#8BE9FD"); t.accentHover = hexToColor("#A6EEFD"); t.onAccent = hexToColor("#1A1A1A");
   t.good = hexToColor("#50FA7B"); t.warn = hexToColor("#FFB86C"); t.bad = hexToColor("#FF5555");
   t.canvasBg = hexToColor("#141414"); t.checkerA = hexToColor("#3C3C3C"); t.checkerB = hexToColor("#2E2E2E");
-  t.selectionAnts = hexToColor("#FFFFFF"); t.nub = hexToColor("#8BE9FD");
+  t.selectionAnts = hexToColor("#FFFFFF"); t.nub = hexToColor("#8BE9FD"); t.grid = hexToColor("#8BE9FD4D");
   t.radius = 4; t.borderWidth = 0; t.padding = 6; t.spacing = 6; t.fontSize = 15;
   return t;
 }
@@ -84,7 +84,7 @@ Theme Theme::classic() {
   t.accent = hexToColor("#0078D4"); t.accentHover = hexToColor("#1A86D9"); t.onAccent = hexToColor("#FFFFFF");
   t.good = hexToColor("#107C10"); t.warn = hexToColor("#C27C0E"); t.bad = hexToColor("#C42B1C");
   t.canvasBg = hexToColor("#E6E6E6"); t.checkerA = hexToColor("#FFFFFF"); t.checkerB = hexToColor("#CCCCCC");
-  t.selectionAnts = hexToColor("#000000"); t.nub = hexToColor("#0078D4");
+  t.selectionAnts = hexToColor("#000000"); t.nub = hexToColor("#0078D4"); t.grid = hexToColor("#0078D44D");
   t.radius = 4; t.borderWidth = 1; t.padding = 6; t.spacing = 6; t.fontSize = 15;
   return t;
 }
@@ -100,9 +100,12 @@ bool Theme::load(const std::string& path, std::string& error) {
   // Missing tokens keep the Dev values, so a theme file only needs the tokens it changes
   *this = dev();
   name = j.value("name", name);
-  if(auto c = j.find("colors"); c != j.end() && c->is_object())
+  if(auto c = j.find("colors"); c != j.end() && c->is_object()) {
     for(auto& t : colorTokens())
       if(auto v = c->find(t.key); v != c->end() && v->is_string()) this->*t.member = hexToColor(v->get<std::string>());
+    // Themes from before the grid token: the accent, faint
+    if(!c->contains("grid")) grid = { accent.x, accent.y, accent.z, 0.3f };
+  }
   if(auto s = j.find("shape"); s != j.end() && s->is_object()) {
     for(auto& t : shapeTokens())
       if(auto v = s->find(t.key); v != s->end() && v->is_number()) this->*t.member = std::clamp(v->get<float>(), t.min, t.max);
