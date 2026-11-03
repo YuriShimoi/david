@@ -1,6 +1,6 @@
 {
   "name": "david",
-  "version-string": "1.2.1",
+  "version-string": "1.2.2",
   "builtin-baseline": "9a5dfef5d1a0438a7d24856a85bd60f309d355e9",
   "dependencies": [
     "sdl3",

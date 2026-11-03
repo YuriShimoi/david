@@ -16,6 +16,17 @@ void App::pushFieldColors() {
   ImGui::PushStyleColor(ImGuiCol_FrameBgActive, _theme.line);
 }
 
+// Paint.NET's Crop to Selection: the canvas becomes the selection's bounding box
+void App::cropToSelection() {
+  commitTool();
+  if(!_doc->hasSelection()) return;
+  IRect b = _doc->selection->bounds();
+  b.x0 = std::max(b.x0, 0); b.y0 = std::max(b.y0, 0);
+  b.x1 = std::min(b.x1, _doc->width() - 1); b.y1 = std::min(b.y1, _doc->height() - 1);
+  if(b.empty()) return;
+  cropImage(*_doc, b, ICON_FA_CROP_SIMPLE);
+}
+
 // Resize Image and Canvas Size share Paint.NET's layout: by percentage or by absolute size, pixel size with
 // resolution, print size, then resampling (resize) or anchor and fill (canvas)
 void App::openSizeDialog(bool canvas) {

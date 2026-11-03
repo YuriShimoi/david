@@ -135,7 +135,7 @@ private:
   std::string _notice;
   int _settingsSeen = 0;
   uint64_t _reloadAt = 0;
-  int _round2 = 0, _round3 = 0, _round4 = 0, _round5 = 0, _round6 = 0, _round7 = 0, _round8 = 0, _round9 = 0, _round10 = 0;
+  int _round2 = 0, _round3 = 0, _round4 = 0, _round5 = 0, _round6 = 0, _round7 = 0, _round8 = 0, _round9 = 0, _round10 = 0, _round11 = 0;
   int _probeGray = 0;  // a screen value one self-test step compares with the next
   bool _selftestMods = false;  // the self-test turns the example mods on
   #pragma endregion
@@ -306,6 +306,12 @@ private:
   EPaste _pasteWhere = EPaste::Layer;
   void copyImage(bool merged, bool cut);
   void pasteImage(EPaste where);
+  // The size of the image on the clipboard; false when it holds none
+  bool clipboardImageSize(int& w, int& h);
+  // The New Image fields: the clipboard image's size when there is one (that size isn't kept as the default)
+  int _newW = 0, _newH = 0;
+  bool _newFromClipboard = false;
+  void cropToSelection();
   void placePaste(bool grow);
   void drawPasteDialog();
   // Vector layers (app/VectorUi.cpp)

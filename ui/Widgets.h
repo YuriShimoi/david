@@ -12,6 +12,9 @@ namespace ui {
   bool iconButton(const char* id, const char* icon, ImVec2 size, bool on = false, const char* tip = nullptr);
   // Icon plus a label, left aligned, for wide panels
   bool labelButton(const char* id, const char* icon, const char* label, ImVec2 size, bool on = false, const char* tip = nullptr);
+  // Flat button with a picture drawn by draw(list, min, max, color) instead of a glyph
+  bool drawnButton(const char* id, ImVec2 size, bool on, const char* tip,
+                   const std::function<void(ImDrawList*, ImVec2, ImVec2, ImU32)>& draw);
   // Draws an icon centered in a rect
   void centeredIcon(ImDrawList* dl, const char* icon, ImVec2 min, ImVec2 max, ImU32 color);
   // Text centered in a rect at a given font size

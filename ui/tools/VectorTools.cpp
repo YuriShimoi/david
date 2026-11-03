@@ -542,7 +542,8 @@ public:
     }
     std::vector<Subpath> paths = o->kind == EVecKind::Path ? o->paths : outline(*o);
     ImU32 line = IM_COL32(120, 200, 255, 220);
-    for(auto& s : paths) {
+    // The line follows the rounded corners; the nodes stay where they are
+    for(auto& s : outline(*o)) {
       auto pts = flatten(s, 0.5);
       for(size_t i = 0; i + 1 < pts.size() || (s.closed && i < pts.size() && pts.size() > 1); i++) {
         Point a = o->xf.apply(pts[i]), b = o->xf.apply(pts[(i + 1) % pts.size()]);
@@ -593,12 +594,7 @@ public:
       ImGui::SameLine(0, 2 * dpi);
       return r;
     };
-    ENodeType cur = ENodeType::Corner;
-    if(!_nodes.empty() && o->kind == EVecKind::Path && _nodes[0].sub < o->paths.size() && _nodes[0].node < o->paths[_nodes[0].sub].nodes.size())
-      cur = o->paths[_nodes[0].sub].nodes[_nodes[0].node].type;
-    if(button("##corner", ICON_TB_ANGLE, N_("Corner node"), cur == ENodeType::Corner)) setType(h, ENodeType::Corner);
-    if(button("##smooth", ICON_TB_WAVE_SINE, N_("Smooth node"), cur == ENodeType::Smooth)) setType(h, ENodeType::Smooth);
-    if(button("##sym", ICON_TB_VECTOR_BEZIER_2, N_("Symmetric node"), cur == ENodeType::Symmetric)) setType(h, ENodeType::Symmetric);
+    if(!_nodes.empty()) { joinButtons(h, *o); ImGui::SameLine(0, 6 * dpi); }
     if(button("##delnode", ICON_FA_MINUS, N_("Delete nodes (Del)"))) removeNodes(h);
     bool closed = o->kind == EVecKind::Path && !o->paths.empty() && o->paths[0].closed;
     if(button("##close", closed ? ICON_FA_LINK_SLASH : ICON_FA_LINK, closed ? N_("Open path") : N_("Close path")))
@@ -606,8 +602,55 @@ public:
     ImGui::NewLine();
   }
 
+  // Join and corner radius of the picked nodes, Gravit style
+  void inspector(ToolHost& h) override {
+    if(!h.vectorMode() || _nodes.empty()) return;
+    const VecObject* o = target(objectsOf(h), h);
+    const PathNode* first = o ? pickedNode(*o) : nullptr;
+    if(!first) return;
+    float dpi = h.dpi();
+    std::string title = std::string(ICON_TB_VECTOR_SPLINE "  ") + tr("Node") + "###node";
+    if(!ImGui::CollapsingHeader(title.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) return;
+    if(!ImGui::BeginTable("##nodet", 2, ImGuiTableFlags_SizingFixedFit)) return;
+    ImGui::TableSetupColumn("##l", ImGuiTableColumnFlags_WidthFixed, 72 * dpi);
+    ImGui::TableSetupColumn("##v", ImGuiTableColumnFlags_WidthStretch);
+    auto row = [](const char* label) {
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextDisabled("%s", tr(label));
+      ImGui::TableNextColumn();
+      ImGui::SetNextItemWidth(-FLT_MIN);
+    };
+    row(N_("Join"));
+    joinButtons(h, *o, ImGui::GetContentRegionAvail().x);
+    row(N_("Corner"));
+    // Live while dragged, one step when let go
+    ImGui::BeginDisabled(first->type != ENodeType::Corner);
+    float r = float(first->radius);
+    if(ui::band("##radius", r, 0, 200, 1, dpi)) {
+      if(!_radiusEdit) {
+        _radiusEdit = std::make_unique<VectorChange>(h.doc());
+        if(VecObject* t = target(_radiusEdit->tree().objects, h)) toPath(*t);
+      }
+      if(VecObject* t = target(_radiusEdit->tree().objects, h))
+        for(auto& k : _nodes)
+          if(k.sub < t->paths.size() && k.node < t->paths[k.sub].nodes.size() && t->paths[k.sub].nodes[k.node].type == ENodeType::Corner)
+            t->paths[k.sub].nodes[k.node].radius = std::max(0.f, r);
+      vectorChanged(h.doc(), h.doc().active(), false);
+    }
+    ImGui::EndDisabled();
+    ImGui::EndTable();
+    if(_radiusEdit && !ImGui::IsAnyItemActive()) {
+      _radiusEdit->commit(N_("Corner Radius"), icon);
+      _radiusEdit.reset();
+    }
+  }
+
 private:
   enum class EHit : uint8_t { None, Node, HandleIn, HandleOut, Segment };
+  // How a node's handles behave: none (straight), mirrored, in one line, or free
+  enum class EJoinType : uint8_t { Straight, Mirrored, Connected, Disconnected };
   enum class EDrag : uint8_t { None, Nodes, Handle, Segment, Marquee };
   struct Key {
     size_t sub, node;
@@ -621,6 +664,53 @@ private:
   Point _start{}, _end{};
   std::unique_ptr<VectorChange> _change;
   std::vector<Subpath> _startPaths;
+  std::unique_ptr<VectorChange> _radiusEdit;
+
+  // The first picked node, on the path or the shape's outline
+  const PathNode* pickedNode(const VecObject& o) {
+    static std::vector<Subpath> s_shape;
+    const std::vector<Subpath>* paths = &o.paths;
+    if(o.kind != EVecKind::Path) { s_shape = outline(o); paths = &s_shape; }
+    if(_nodes.empty() || _nodes[0].sub >= paths->size() || _nodes[0].node >= (*paths)[_nodes[0].sub].nodes.size()) return nullptr;
+    return &(*paths)[_nodes[0].sub].nodes[_nodes[0].node];
+  }
+
+  static EJoinType joinOf(const PathNode& n) {
+    if(n.type == ENodeType::Symmetric) return EJoinType::Mirrored;
+    if(n.type == ENodeType::Smooth) return EJoinType::Connected;
+    bool handles = n.in.x != n.p.x || n.in.y != n.p.y || n.out.x != n.p.x || n.out.y != n.p.y;
+    return handles ? EJoinType::Disconnected : EJoinType::Straight;
+  }
+
+  // The four join buttons, drawn like their handles; width 0 = square buttons
+  void joinButtons(ToolHost& h, const VecObject& o, float width = 0) {
+    const PathNode* n = pickedNode(o);
+    EJoinType cur = n ? joinOf(*n) : EJoinType::Straight;
+    float gap = 2 * h.dpi(), fh = ImGui::GetFrameHeight();
+    ImVec2 size{ width > 0 ? std::max(fh, (width - gap * 3) / 4) : fh, fh };
+    static const char* tips[] = { N_("Straight"), N_("Mirrored"), N_("Connected"), N_("Disconnected") };
+    for(int i = 0; i < 4; i++) {
+      if(i) ImGui::SameLine(0, gap);
+      std::string id = "##join" + std::to_string(i);
+      auto draw = [i, dpi = h.dpi()](ImDrawList* dl, ImVec2 a, ImVec2 b, ImU32 col) {
+        // A node in the middle on an arch, with its handles
+        float cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2, s = std::min(b.x - a.x, b.y - a.y) * 0.32f, t = std::max(1.f, dpi);
+        ImVec2 node{ cx, cy - s * 0.35f }, l{ cx - s * 1.4f, cy + s * 0.6f }, r{ cx + s * 1.4f, cy + s * 0.6f };
+        if(i == 0) { dl->AddLine(l, node, col, t); dl->AddLine(node, r, col, t); }
+        else dl->AddBezierCubic(l, { l.x, node.y }, { r.x, node.y }, r, col, t);
+        ImVec2 hl{ node.x - s, node.y }, hr{ node.x + s, node.y };
+        if(i == 2) hl.x = node.x - s * 0.5f;
+        if(i == 3) { hl = { node.x - s * 0.8f, node.y - s * 0.7f }; hr = { node.x + s * 0.8f, node.y - s * 0.7f }; }
+        if(i) {
+          dl->AddLine(hl, node, col, t); dl->AddLine(node, hr, col, t);
+          dl->AddCircleFilled(hl, 1.6f * t, col); dl->AddCircleFilled(hr, 1.6f * t, col);
+        }
+        float q = 2.2f * t;
+        dl->AddRectFilled({ node.x - q, node.y - q }, { node.x + q, node.y + q }, col);
+      };
+      if(ui::drawnButton(id.c_str(), size, cur == EJoinType(i), tr(tips[i]), draw)) setJoin(h, EJoinType(i));
+    }
+  }
 
   static std::vector<VecObject>& objectsOf(ToolHost& h) { return vectorTree(h.doc().active(), h.doc().active().frame()).objects; }
 
@@ -688,13 +778,16 @@ private:
     ch.commit(name, icon);
   }
 
-  void setType(ToolHost& h, ENodeType type) {
+  void setJoin(ToolHost& h, EJoinType join) {
+    ENodeType type = join == EJoinType::Mirrored ? ENodeType::Symmetric : join == EJoinType::Connected ? ENodeType::Smooth : ENodeType::Corner;
     change(h, N_("Node Type"), [&](VecObject& o) {
       for(auto& k : _nodes) {
         if(k.sub >= o.paths.size() || k.node >= o.paths[k.sub].nodes.size()) continue;
         PathNode& n = o.paths[k.sub].nodes[k.node];
         n.type = type;
-        if(type == ENodeType::Corner) continue;
+        if(join == EJoinType::Straight) { n.in = n.out = n.p; continue; }
+        // Free handles keep their place; a straight node gets the lined-up ones below to start from
+        if(join == EJoinType::Disconnected && joinOf(n) == EJoinType::Disconnected) continue;
         // Line up the handles through the node (straight nodes get handles a third of the way to their neighbors)
         const Subpath& s = o.paths[k.sub];
         size_t cnt = s.nodes.size();

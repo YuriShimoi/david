@@ -113,6 +113,14 @@ static bool readClipboard(Lifted& out) {
 }
 #pragma endregion
 
+bool App::clipboardImageSize(int& w, int& h) {
+  Lifted img;
+  if(!readClipboard(img)) return false;
+  w = img.bounds.width();
+  h = img.bounds.height();
+  return w > 0 && h > 0;
+}
+
 #pragma region [ Copy and paste ]
 // The selection's pixels (or the whole image without one) of the active layer, or of the merged image
 void App::copyImage(bool merged, bool cut) {

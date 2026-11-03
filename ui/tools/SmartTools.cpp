@@ -366,6 +366,10 @@ public:
     h.doc().onChanged();
   }
 
+  // While a curve is being drawn, Ctrl+Z takes back its last node like Backspace
+  bool undoable() const override { return _curve && !_nodes.empty(); }
+  bool undo(ToolHost& h) override { return undoable() && onKey(h, ImGuiKey_Backspace); }
+
   bool onKey(ToolHost& h, ImGuiKey k) override {
     if(_nodes.empty()) return false;
     if(k == ImGuiKey_Escape) cancel(h);

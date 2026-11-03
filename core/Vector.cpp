@@ -60,11 +60,57 @@ static Subpath polygonPath(const std::vector<Point>& pts) {
   return s;
 }
 
+bool hasRoundCorners(const std::vector<Subpath>& paths) {
+  for(auto& s : paths) for(auto& n : s.nodes) if(n.radius > 0) return true;
+  return false;
+}
+
+// A rounded corner becomes two nodes on its sides, joined by a circular arc. The sides are followed along
+// their tangents at the node, and each takes at most half its length so neighbor corners never cross.
+std::vector<Subpath> roundCorners(const std::vector<Subpath>& paths) {
+  std::vector<Subpath> out;
+  auto same = [](Point a, Point b) { return a.x == b.x && a.y == b.y; };
+  for(auto& s : paths) {
+    Subpath r;
+    r.closed = s.closed;
+    size_t cnt = s.nodes.size();
+    for(size_t i = 0; i < cnt; i++) {
+      const PathNode& n = s.nodes[i];
+      if(n.radius <= 0 || n.type != ENodeType::Corner || cnt < 2 || (!s.closed && (i == 0 || i == cnt - 1))) { r.nodes.push_back(n); continue; }
+      const PathNode &prev = s.nodes[(i + cnt - 1) % cnt], &next = s.nodes[(i + 1) % cnt];
+      Point tIn = !same(n.in, n.p) ? n.in : !same(prev.out, prev.p) ? prev.out : prev.p;
+      Point tOut = !same(n.out, n.p) ? n.out : !same(next.in, next.p) ? next.in : next.p;
+      double ax = tIn.x - n.p.x, ay = tIn.y - n.p.y, bx = tOut.x - n.p.x, by = tOut.y - n.p.y;
+      double la = std::hypot(ax, ay), lb = std::hypot(bx, by);
+      if(la < 1e-9 || lb < 1e-9) { r.nodes.push_back(n); continue; }
+      ax /= la; ay /= la; bx /= lb; by /= lb;
+      double alpha = std::acos(std::clamp(ax * bx + ay * by, -1.0, 1.0));
+      if(alpha < 1e-3 || alpha > PI - 1e-3) { r.nodes.push_back(n); continue; }
+      double half = std::tan(alpha / 2);
+      double dmax = std::min(std::hypot(prev.p.x - n.p.x, prev.p.y - n.p.y), std::hypot(next.p.x - n.p.x, next.p.y - n.p.y)) / 2;
+      double d = std::min(n.radius / half, dmax), rad = d * half;
+      double k = 4.0 / 3.0 * std::tan((PI - alpha) / 4) * rad;
+      double li = std::hypot(n.in.x - n.p.x, n.in.y - n.p.y), lo = std::hypot(n.out.x - n.p.x, n.out.y - n.p.y);
+      PathNode a, b;
+      a.p = { n.p.x + ax * d, n.p.y + ay * d };
+      a.in = li > d ? n.in : a.p;
+      a.out = { a.p.x - ax * k, a.p.y - ay * k };
+      b.p = { n.p.x + bx * d, n.p.y + by * d };
+      b.in = { b.p.x - bx * k, b.p.y - by * k };
+      b.out = lo > d ? n.out : b.p;
+      r.nodes.push_back(a);
+      r.nodes.push_back(b);
+    }
+    out.push_back(std::move(r));
+  }
+  return out;
+}
+
 std::vector<Subpath> outline(const VecObject& o) {
   double l = std::min(o.x, o.x + o.w), t = std::min(o.y, o.y + o.h), r = std::max(o.x, o.x + o.w), b = std::max(o.y, o.y + o.h);
   double rx = (r - l) / 2, ry = (b - t) / 2, cx = l + rx, cy = t + ry;
   switch(o.kind) {
-    case EVecKind::Path: return o.paths;
+    case EVecKind::Path: return hasRoundCorners(o.paths) ? roundCorners(o.paths) : o.paths;
     case EVecKind::Rect: {
       double rr = std::clamp(o.radius, 0.0, std::min(rx, ry));
       if(rr <= 0) return { polygonPath({ { l, t }, { r, t }, { r, b }, { l, b } }) };

@@ -262,6 +262,12 @@ void resizeCanvas(Document& doc, int w, int h, int anchorX, int anchorY, uint32_
   for(size_t i = 0; i < doc.layers.size(); i++) layers.push_back(reframeLayer(*doc.layers[i], w, h, dx, dy, i == 0 ? fill : 0));
   pushReplace(doc, std::move(layers), w, h, doc.dpi, N_("Canvas Size"), icon);
 }
+
+void cropImage(Document& doc, const IRect& r, const char* icon) {
+  std::vector<std::unique_ptr<Layer>> layers;
+  for(auto& l : doc.layers) layers.push_back(reframeLayer(*l, r.width(), r.height(), -r.x0, -r.y0, 0));
+  pushReplace(doc, std::move(layers), r.width(), r.height(), doc.dpi, N_("Crop to Selection"), icon);
+}
 #pragma endregion
 
 }

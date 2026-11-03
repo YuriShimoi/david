@@ -3,6 +3,19 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.2] - Unreleased
+
+### Added
+- Node section in the Object window when the Node tool has nodes picked (Gravit style): Join sets the handles to straight, mirrored, connected or disconnected, and Corner rounds a corner node with a radius. The radius stays on the node and is drawn as an arc; SVG files get the arcs plus David's own attributes, so it stays editable. The Node tool bar uses the same four join buttons.
+- Image > Crop to Selection (Ctrl+Shift+X): the canvas becomes the selection's bounding box.
+
+### Changed
+- New Image starts at the clipboard image's size when the clipboard holds one; that size isn't kept as the default.
+- Ctrl+Z while drawing with the Pen takes back the last node instead of an earlier edit.
+
+### Removed
+- The Ends and Corners fields of the Object window's Border section.
+
 ## [1.2.1] - 2026-11-02
 
 ### Added
