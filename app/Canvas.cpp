@@ -206,6 +206,7 @@ void App::selectTool(int index) {
     if(found >= 0) { _doc->activeLayer = found; _doc->onChanged(); }
     else _commands.run("layer.addVector");
   }
+  _tools[index]->activate(*this);
 }
 
 bool App::vectorMode() { return _cfg.betaVector && _doc->active().kind == ELayerKind::Vector; }

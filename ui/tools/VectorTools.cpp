@@ -502,6 +502,8 @@ public:
   }
 
   bool busy() const override { return _drag != EDrag::None; }
+  // Node picks from an earlier use don't carry over
+  void activate(ToolHost&) override { _nodes.clear(); }
   // Esc lets go of the picked nodes, then goes back to the Mouse tool
   bool onKey(ToolHost& h, ImGuiKey k) override {
     if(k != ImGuiKey_Escape || !h.vectorMode() || _drag != EDrag::None) return false;

@@ -131,6 +131,8 @@ public:
   // Finishes a pending edit into History; called before tool switches and other edits
   virtual void commit(ToolHost&) {}
   virtual void cancel(ToolHost& h) { commit(h); }
+  // The tool becomes current
+  virtual void activate(ToolHost&) {}
   // Enter, Escape, Backspace while this tool is current; true when handled
   virtual bool onKey(ToolHost&, ImGuiKey) { return false; }
   // Called every frame while no text field has focus, for the tool's own plain keys (shape cycle, arrows)

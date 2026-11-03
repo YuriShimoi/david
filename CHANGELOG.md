@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.2.1] - Unreleased
+## [1.2.1] - 2026-11-02
 
 ### Added
 - Vector tool row (vector layers): Mouse, Node, Shapes, Pen (the Curve tool), Line, Pencil and Text lead the tool bar, followed by flip, rotate 90°, group, boolean operations, order, object to path, duplicate and delete.

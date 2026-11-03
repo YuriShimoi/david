@@ -5,16 +5,16 @@
 
 A free raster paint program for Windows and Linux, inspired by Paint.NET's simple layout. It adds pixel-art and animation tools, can be extended with mods, and comes in English and Brazilian Portuguese.
 
-**[Download the Windows installer](https://github.com/YuriShimoi/david/releases/latest/download/david-1.2.0-setup.exe)** (v1.2.0, 6 MB, no admin rights needed)
+**[Download the Windows installer](https://github.com/YuriShimoi/david/releases/latest/download/david-1.2.1-setup.exe)** (v1.2.1, 6 MB, no admin rights needed)
 
 Other downloads are on the [release page](https://github.com/YuriShimoi/david/releases/latest):
 
 | File | For |
 |---|---|
-| `david-1.2.0-setup.exe` | Windows 10/11 installer (8.1 best effort) |
-| `david-1.2.0-win64-portable.zip` | Windows portable: unzip and run `david.exe` |
-| `David-1.2.0-x86_64.AppImage` | Linux, one file: `chmod +x` and run |
-| `david-1.2.0-linux-x86_64.tar.gz` | Linux: unpack and run `david` |
+| `david-1.2.1-setup.exe` | Windows 10/11 installer (8.1 best effort) |
+| `david-1.2.1-win64-portable.zip` | Windows portable: unzip and run `david.exe` |
+| `David-1.2.1-x86_64.AppImage` | Linux, one file: `chmod +x` and run |
+| `david-1.2.1-linux-x86_64.tar.gz` | Linux: unpack and run `david` |
 
 ## What it has
 - **Common tools**: selections, move and transform, brush, pencil, eraser, bucket, picker, gradient, line and curve, shapes, text, layers with blend modes, unlimited history.
