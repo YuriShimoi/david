@@ -166,6 +166,75 @@ uint32_t fromVec(const float v[4]) {
 }
 }
 
+#pragma region [ Smart guides ]
+void Snapper::begin(const std::vector<VecObject>& objects, const std::vector<uint64_t>& skip, const std::vector<Point>& extra) {
+  clear();
+  _targets = extra;
+  for(auto& o : objects) {
+    if(!o.visible || std::find(skip.begin(), skip.end(), o.id) != skip.end()) continue;
+    DRect b = bounds(o, true);
+    if(b.empty()) continue;
+    double cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    for(Point p : { Point{ b.x0, b.y0 }, Point{ b.x1, b.y0 }, Point{ b.x0, b.y1 }, Point{ b.x1, b.y1 }, Point{ cx, cy } }) _targets.push_back(p);
+    if(o.kind == EVecKind::Text || o.kind == EVecKind::Group) continue;
+    for(auto& sp : o.kind == EVecKind::Path ? o.paths : outline(o))
+      for(auto& n : sp.nodes) _targets.push_back(o.xf.apply(n.p));
+  }
+}
+
+Point Snapper::snap(const std::vector<Point>& moving, double tol, bool snapX, bool snapY) {
+  _guides.clear();
+  double bx = tol, by = tol;
+  Point off{};
+  bool hx = false, hy = false;
+  for(const Point& m : moving)
+    for(const Point& t : _targets) {
+      if(snapX && std::abs(t.x - m.x) < bx) { bx = std::abs(t.x - m.x); off.x = t.x - m.x; hx = true; }
+      if(snapY && std::abs(t.y - m.y) < by) { by = std::abs(t.y - m.y); off.y = t.y - m.y; hy = true; }
+    }
+  // A line through every point on the snapped axis, from the farthest one to the other
+  auto guide = [&](bool vertical, double v) {
+    double lo = 1e300, hi = -1e300;
+    auto add = [&](Point p) {
+      double a = vertical ? p.x : p.y, along = vertical ? p.y : p.x;
+      if(std::abs(a - v) > 1e-6) return;
+      lo = std::min(lo, along); hi = std::max(hi, along);
+    };
+    for(const Point& m : moving) add({ m.x + off.x, m.y + off.y });
+    for(const Point& t : _targets) add(t);
+    if(lo <= hi) _guides.push_back(vertical ? Guide{ { v, lo }, { v, hi } } : Guide{ { lo, v }, { hi, v } });
+  };
+  if(hx) {
+    // The snapped x is the target's, so look it up from any moving point that landed on one
+    for(const Point& m : moving)
+      if(std::any_of(_targets.begin(), _targets.end(), [&](const Point& t) { return std::abs(t.x - (m.x + off.x)) < 1e-6; })) { guide(true, m.x + off.x); break; }
+  }
+  if(hy) {
+    for(const Point& m : moving)
+      if(std::any_of(_targets.begin(), _targets.end(), [&](const Point& t) { return std::abs(t.y - (m.y + off.y)) < 1e-6; })) { guide(false, m.y + off.y); break; }
+  }
+  return off;
+}
+
+void Snapper::draw(ToolHost& h, ImDrawList* dl) const {
+  ImU32 col = IM_COL32(255, 80, 160, 230);
+  float dpi = h.dpi();
+  for(auto& g : _guides) {
+    ImVec2 a = h.toScreen(g.a.x, g.a.y), b = h.toScreen(g.b.x, g.b.y);
+    dl->AddLine(a, b, col, std::max(1.f, dpi));
+    for(ImVec2 q : { a, b }) {
+      float r = 3 * dpi;
+      dl->AddLine({ q.x - r, q.y - r }, { q.x + r, q.y + r }, col, std::max(1.f, dpi));
+      dl->AddLine({ q.x - r, q.y + r }, { q.x + r, q.y - r }, col, std::max(1.f, dpi));
+    }
+  }
+}
+
+bool Snapper::wanted(ToolHost& h, const ToolInput& in) {
+  return h.vectorMode() && !in.alt && !(h.settings().grid && h.settings().gridSnap);
+}
+#pragma endregion
+
 #pragma region [ Object tool ]
 // The Mouse tool. On a vector layer (with vector support on) it picks objects: click, Shift-click and a
 // marquee select; dragging moves, the corner nubs scale (Shift keeps the ratio) and the round nub rotates
@@ -223,6 +292,14 @@ public:
         if(!in.shift || dx != 0) dx += sx - x0;
         if(!in.shift || dy != 0) dy += sy - y0;
       }
+      // Smart guides: the box's corners and center line up with the other objects
+      if(Snapper::wanted(h, in) && !_box.empty()) {
+        double cx = (_box.x0 + _box.x1) / 2 + dx, cy = (_box.y0 + _box.y1) / 2 + dy;
+        std::vector<Point> pts = { { _box.x0 + dx, _box.y0 + dy }, { _box.x1 + dx, _box.y0 + dy }, { _box.x0 + dx, _box.y1 + dy },
+                                   { _box.x1 + dx, _box.y1 + dy }, { cx, cy } };
+        Point off = _snap.snap(pts, 5 * h.dpi() / h.nav().view.zoom, !in.shift || dx != 0, !in.shift || dy != 0);
+        dx += off.x; dy += off.y;
+      } else _snap.idle();
       m = Affine::translate(dx, dy);
     } else if(_mode == EMode::Rotate) {
       Point c{ (_box.x0 + _box.x1) / 2, (_box.y0 + _box.y1) / 2 };
@@ -232,6 +309,8 @@ public:
     } else {
       // The opposite corner stays; the dragged one follows the pointer (onto the grid when snap is on)
       snapToGrid(h.settings(), p.x, p.y);
+      if(Snapper::wanted(h, in)) { Point off = _snap.snap({ p }, 5 * h.dpi() / h.nav().view.zoom); p.x += off.x; p.y += off.y; }
+      else _snap.idle();
       Point fixed{ _handle == 1 || _handle == 2 ? _box.x0 : _box.x1, _handle >= 2 ? _box.y0 : _box.y1 };
       Point from{ _handle == 1 || _handle == 2 ? _box.x1 : _box.x0, _handle >= 2 ? _box.y1 : _box.y0 };
       double sx = std::abs(from.x - fixed.x) > 1e-9 ? (p.x - fixed.x) / (from.x - fixed.x) : 1;
@@ -261,6 +340,7 @@ public:
       _change->commit(names[int(_mode)], icon);
       _change.reset();
     }
+    _snap.clear();
     _mode = EMode::None;
   }
 
@@ -268,6 +348,7 @@ public:
   void cancel(ToolHost&) override {
     if(_change) _change->cancel();
     _change.reset();
+    _snap.clear();
     _mode = EMode::None;
   }
 
@@ -291,6 +372,7 @@ public:
     float dpi = h.dpi();
     auto& objs = objectsOf(h);
     ImU32 accent = ImGui::GetColorU32(ImGuiCol_SliderGrab);
+    _snap.draw(h, dl);
     // The object under the pointer, outlined
     if(_mode == EMode::None)
       if(VecObject* o = hitTest(objs, { at.x, at.y }, 4 / h.nav().view.zoom)) {
@@ -337,6 +419,7 @@ private:
   int _handle = -1;
   Point _start{}, _end{};
   DRect _box;
+  Snapper _snap;
   std::unique_ptr<VectorChange> _change;
   std::map<uint64_t, Affine> _startXf;
 
@@ -369,6 +452,7 @@ private:
     _mode = mode;
     _handle = handle;
     _box = selectionBox(h);
+    if(mode != EMode::Rotate) _snap.begin(objectsOf(h), h.doc().selectedObjects);
     _change = std::make_unique<VectorChange>(h.doc());
     _startXf.clear();
     for(uint64_t id : h.doc().selectedObjects)
@@ -447,6 +531,24 @@ public:
       snapToGrid(st, w.x, w.y);
       _end = { _start.x + w.x - w0.x, _start.y + w.y - w0.y };
     }
+    // Smart guides: the moving nodes (or the handle) line up with other nodes and objects
+    if(Snapper::wanted(h, in) && (_drag == EDrag::Nodes || _drag == EDrag::Handle) && _hit.sub < _startPaths.size() && _hit.node < _startPaths[_hit.sub].nodes.size()) {
+      double dx = _end.x - _start.x, dy = _end.y - _start.y;
+      std::vector<Point> pts;
+      if(_drag == EDrag::Nodes) {
+        for(auto& k : _nodes)
+          if(k.sub < _startPaths.size() && k.node < _startPaths[k.sub].nodes.size()) {
+            Point w = o->xf.apply(_startPaths[k.sub].nodes[k.node].p);
+            pts.push_back({ w.x + dx, w.y + dy });
+          }
+      } else {
+        const PathNode& n = _startPaths[_hit.sub].nodes[_hit.node];
+        Point w = o->xf.apply(_hit.kind == EHit::HandleIn ? n.in : n.out);
+        pts.push_back({ w.x + dx, w.y + dy });
+      }
+      Point off = _snap.snap(pts, 5 * h.dpi() / h.nav().view.zoom);
+      _end = { _end.x + off.x, _end.y + off.y };
+    } else _snap.idle();
     Affine inv = o->xf.inverse();
     Point a = inv.apply(_start), b = inv.apply(_end);
     Point d{ b.x - a.x, b.y - a.y };
@@ -498,6 +600,7 @@ public:
       else _change->cancel();
       _change.reset();
     }
+    _snap.clear();
     _drag = EDrag::None;
   }
 
@@ -514,6 +617,7 @@ public:
   void cancel(ToolHost&) override {
     if(_change) _change->cancel();
     _change.reset();
+    _snap.clear();
     _drag = EDrag::None;
   }
 
@@ -578,6 +682,7 @@ public:
           dl->AddCircleFilled(p, r - 1, fill);
         }
       }
+    _snap.draw(h, dl);
     if(_drag == EDrag::Marquee) {
       ImVec2 a = h.toScreen(_start.x, _start.y), e = h.toScreen(_end.x, _end.y);
       dl->AddRect({ std::min(a.x, e.x), std::min(a.y, e.y) }, { std::max(a.x, e.x), std::max(a.y, e.y) }, IM_COL32(120, 200, 255, 200));
@@ -665,6 +770,7 @@ private:
   std::unique_ptr<VectorChange> _change;
   std::vector<Subpath> _startPaths;
   std::unique_ptr<VectorChange> _radiusEdit;
+  Snapper _snap;
 
   // The first picked node, on the path or the shape's outline
   const PathNode* pickedNode(const VecObject& o) {
@@ -766,6 +872,13 @@ private:
     _startPaths = o->paths;
     _drag = drag;
     _hit = hit;
+    // Smart guides: the other objects, and this path's nodes that aren't moving (a handle's own node too)
+    std::vector<Point> own;
+    for(size_t si = 0; si < _startPaths.size(); si++)
+      for(size_t ni = 0; ni < _startPaths[si].nodes.size(); ni++)
+        if(drag == EDrag::Handle || std::find(_nodes.begin(), _nodes.end(), Key{ si, ni }) == _nodes.end())
+          own.push_back(o->xf.apply(_startPaths[si].nodes[ni].p));
+    _snap.begin(_change->tree().objects, { o->id }, own);
   }
 
   template<class F> void change(ToolHost& h, const char* name, F fn) {

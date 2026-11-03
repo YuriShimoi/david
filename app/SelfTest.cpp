@@ -1276,6 +1276,24 @@ void App::selftestStep(int frame) {
         check("the Node tool picks a rounded corner", n.radius == 20 && tool().id == ETool::Node);
         writeShot(_selftestDir + "/p11-node.png");
         use(ETool::Mouse);
+        // Smart guides: a box moved near another one's left edge lands on it
+        {
+          VectorChange ch(*_doc);
+          VecObject b;
+          b.id = newObjectId(); b.kind = EVecKind::Rect; b.x = 60; b.y = 120; b.w = 20; b.h = 20;
+          b.fill = VecPaint::solid(RED);
+          ch.tree().objects.push_back(b);
+          ch.tree().touch();
+          ch.commit("Test", "");
+          _doc->selectedObjects = { b.id };
+        }
+        ImVec2 a = at(70, 130), e = at(53, 131);
+        drag(a.x, a.y, e.x, e.y, SDL_BUTTON_LEFT);
+        break;
+      }
+      case 8: {
+        DRect b = bounds(objects()[1], true);
+        check("moving an object snaps it to another object's edge", std::abs(b.x0 - 40) < 1e-6 && std::abs(b.y0 - 121) < 1e-6);
         _cfg.betaVector = false;
         _round11 = 0;
         break;
