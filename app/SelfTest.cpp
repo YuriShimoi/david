@@ -1182,7 +1182,7 @@ void App::selftestStep(int frame) {
     }
   }
 
-  #pragma region [ Round 11: 1.2.2 fixes ]
+  #pragma region [ Round 11: patch fixes ]
   if(_round11 && frame > _round11) {
     int f = frame - _round11;
     auto at = [&](double x, double y) { return toScreen(x, y); };
