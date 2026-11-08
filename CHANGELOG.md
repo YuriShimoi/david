@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Node section in the Object window when the Node tool has nodes picked (Gravit style): Join sets the handles to straight, mirrored, connected or disconnected, and Corner rounds a corner node with a radius. The radius stays on the node and is drawn as an arc; SVG files get the arcs plus David's own attributes, so it stays editable. The Node tool bar uses the same four join buttons.
 - Image > Crop to Selection (Ctrl+Shift+X): the canvas becomes the selection's bounding box.
+- Effects > Distort > Two-Color Dither: turns the image into a dithered mix of two chosen colors, matched by nearest color (along the line between the two) or by lightness only; the range can stretch to the image, with the Bayer, blue noise, pattern and error-diffusion methods.
 - Smart guides on vector layers: moving objects (and their scale corners), nodes, handles and Pen points snap horizontally and vertically to the other objects' edges, centers and nodes, shown with guide lines. Hold Alt to place freely; grid snap, when on, takes over.
 
 ### Changed

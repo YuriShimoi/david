@@ -175,6 +175,86 @@ void registerDither() {
   };
   registerEffect(e);
 
+  // Two-Color Dither: every pixel becomes a mix of two colors, placed by how far it sits from the first to the
+  // second (along the line between them in OKLab), or only by its lightness (dark to the darker color). The
+  // range can stretch to the image's own spread, so the whole image uses the full mix.
+  e = {};
+  e.id = "two-color-dither"; e.name = "Two-Color Dither"; e.category = "Effects/Distort";
+  e.params = {
+    { "color1", "Color 1", EParam::Color, 0, 0, double(0xFF000000u) },
+    { "color2", "Color 2", EParam::Color, 0, 0, double(0xFFFFFFFFu) },
+    { "mode", "Match by", EParam::Choice, 0, 1, 0, { "Nearest color", "Lightness" } },
+    { "range", "Range", EParam::Choice, 0, 1, 0, { "The two colors", "The image" } },
+    { "method", "Method", EParam::Choice, 0, METHODS - 1, Bayer4, { "Bayer 2×2", "Bayer 4×4", "Bayer 8×8", "Blue noise", "Pattern", "Floyd–Steinberg", "Atkinson", "Sierra Lite", "Jarvis–Judice–Ninke" } },
+    { "pattern", "Pattern", EParam::Text, 0, 0, 0, {}, "", "method=4" },
+    { "scale", "Pattern scale", EParam::Int, 1, 8, 1, {}, "", "method=0|1|2|3|4" },
+    { "serpentine", "Serpentine", EParam::Bool, 0, 1, 1, {}, "", "method=5|6|7|8" },
+  };
+  e.run = [](const Image& src, Image& dst, const ParamValues& v, const EffectEnv& env) {
+    uint32_t c1 = v.color("color1") | 0xFF000000u, c2 = v.color("color2") | 0xFF000000u;
+    Space sp{ false };
+    V3 a = sp.of(c1), b = sp.of(c2), seg = b - a;
+    float len = dot(seg, seg);
+    bool light = v.geti("mode") == 1;
+    // t: 0 at color 1, 1 at color 2 (lightness: 0 at the darker one)
+    bool firstDark = a.x <= b.x;
+    float lo = std::min(a.x, b.x), hi = std::max(a.x, b.x);
+    auto position = [&](uint32_t c) {
+      V3 p = sp.of(c);
+      if(light) {
+        float t = hi - lo > 1e-4f ? (p.x - lo) / (hi - lo) : p.x;
+        return firstDark ? t : 1 - t;
+      }
+      return len > 1e-12f ? dot(p - a, seg) / len : 0.f;
+    };
+    std::vector<float> t(src.px.size(), 0);
+    float tmin = 1e30f, tmax = -1e30f;
+    for(size_t i = 0; i < src.px.size(); i++) {
+      if(!(src.px[i] >> 24)) continue;
+      t[i] = position(src.px[i]);
+      tmin = std::min(tmin, t[i]); tmax = std::max(tmax, t[i]);
+    }
+    bool stretch = v.geti("range") == 1 && tmax - tmin > 1e-6f;
+    for(size_t i = 0; i < t.size(); i++) t[i] = std::clamp(stretch ? (t[i] - tmin) / (tmax - tmin) : t[i], 0.f, 1.f);
+    auto put = [&](int x, int y, bool second) { uint32_t c = src.at(x, y); dst.at(x, y) = ((second ? c2 : c1) & 0xFFFFFF) | (c & 0xFF000000u); };
+
+    int method = std::clamp(v.geti("method", Bayer4), 0, METHODS - 1), scale = std::max(1, v.geti("scale", 1));
+    if(method <= Custom) {
+      static const char* builtin[] = { "bayer2", "bayer4", "bayer8", "bluenoise" };
+      const Pattern* pat = method < Custom ? findPattern(builtin[method]) : findPattern(v.str("pattern"));
+      if(!pat) pat = findPattern("bayer4");
+      parallelRows(src.h, [&](int y0, int y1) {
+        for(int y = y0; y < y1; y++)
+          for(int x = 0; x < src.w; x++) {
+            if(!(src.at(x, y) >> 24)) { dst.at(x, y) = src.at(x, y); continue; }
+            int px = int(std::floor(double(x + env.originX) / scale)), py = int(std::floor(double(y + env.originY) / scale));
+            put(x, y, t[size_t(y) * src.w + x] > pat->at(px, py));
+          }
+      });
+      return;
+    }
+    // Error diffusion on t alone
+    const auto& taps = kernel(method);
+    bool serp = v.geti("serpentine", 1) != 0;
+    for(int y = 0; y < src.h; y++) {
+      bool rev = serp && (y & 1);
+      for(int k = 0; k < src.w; k++) {
+        int x = rev ? src.w - 1 - k : k;
+        if(!(src.at(x, y) >> 24)) { dst.at(x, y) = src.at(x, y); continue; }
+        float cur = t[size_t(y) * src.w + x];
+        bool second = cur >= 0.5f;
+        put(x, y, second);
+        float err = cur - (second ? 1.f : 0.f);
+        for(auto& tp : taps) {
+          int nx = x + (rev ? -tp.dx : tp.dx), ny = y + tp.dy;
+          if(nx < 0 || ny >= src.h || nx >= src.w) continue;
+          t[size_t(ny) * src.w + nx] += err * tp.w;
+        }
+      }
+    }
+  };
+  registerEffect(e);
+
   // Dither Blur: a Gaussian blur put back onto the colors the image already uses (or the palette) with an
   // ordered pattern, so pixel art gets soft transitions without new colors; soft alpha edges dither too
   e = {};
