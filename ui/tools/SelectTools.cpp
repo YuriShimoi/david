@@ -165,6 +165,14 @@ private:
 
 #pragma region [ Magic wand ]
 // Selects by color with the OKLab flood engine. Shift = global; Ctrl/Alt combine like the other selection tools.
+// Esc with nothing pending: drops the selection (the selection tools)
+static bool escapeDeselects(ToolHost& h, ImGuiKey k) {
+  Document& doc = h.doc();
+  if(k != ImGuiKey_Escape || !doc.hasSelection()) return false;
+  pushSelection(doc, std::make_unique<Mask>(doc.width(), doc.height()), N_("Deselect"), ICON_FA_XMARK);
+  return true;
+}
+
 class WandTool : public Tool {
 public:
   WandTool() : Tool(ETool::MagicWand, ICON_TB_WAND, N_("Magic Wand"), ImGuiKey_S) {}
@@ -188,6 +196,7 @@ public:
   }
 
   ECursor cursor(ToolHost&, const ToolInput&) override { return ECursor::Cross; }
+  bool onKey(ToolHost& h, ImGuiKey k) override { return escapeDeselects(h, k); }
 };
 #pragma endregion
 
@@ -198,7 +207,8 @@ public:
   PolyLassoTool() : Tool(ETool::PolyLasso, ICON_TB_LASSO_POLYGON, N_("Polygon Lasso"), ImGuiKey_S) {}
 
   void down(ToolHost& h, const ToolInput& in) override {
-    Point p{ in.x, in.y };
+    // Corners land on pixel edges, like the rectangle select
+    Point p{ std::round(in.x), std::round(in.y) };
     if(_pts.empty()) {
       _mode = modeFor(h.settings(), in);
       _pts.push_back(p);
@@ -233,7 +243,7 @@ public:
   void overlay(ToolHost& h, ImDrawList* dl, const ToolInput& at) override {
     if(_pts.empty()) return;
     auto pts = _pts;
-    pts.push_back({ at.x, at.y });
+    pts.push_back({ std::round(at.x), std::round(at.y) });
     antsPolyline(h, dl, pts, false);
     ImVec2 first = h.toScreen(_pts[0].x, _pts[0].y);
     dl->AddCircleFilled(first, 4 * h.dpi(), ImGui::GetColorU32(ImGuiCol_SliderGrab));
@@ -374,7 +384,9 @@ public:
   }
 
   bool onKey(ToolHost& h, ImGuiKey k) override {
-    if(!_session) return false;
+    // Esc: a pending move goes back first, then the selection is dropped (selections land here when
+    // "select, then move" is on)
+    if(!_session) return escapeDeselects(h, k);
     if(k == ImGuiKey_Enter || k == ImGuiKey_KeypadEnter) { commit(h); return true; }
     if(k == ImGuiKey_Escape) { cancel(h); return true; }
     return false;
@@ -576,7 +588,7 @@ public:
   bool busy() const override { for(auto& t : _shapes) if(t->busy()) return true; return false; }
   void commit(ToolHost& h) override { for(auto& t : _shapes) t->commit(h); }
   void cancel(ToolHost& h) override { for(auto& t : _shapes) t->cancel(h); }
-  bool onKey(ToolHost& h, ImGuiKey k) override { return cur(h).onKey(h, k); }
+  bool onKey(ToolHost& h, ImGuiKey k) override { return cur(h).onKey(h, k) || escapeDeselects(h, k); }
   void overlay(ToolHost& h, ImDrawList* dl, const ToolInput& at) override { cur(h).overlay(h, dl, at); }
   ECursor cursor(ToolHost&, const ToolInput&) override { return ECursor::Cross; }
 

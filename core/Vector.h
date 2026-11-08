@@ -50,10 +50,12 @@ enum class EStrokeAlign : uint8_t { Center, Inside, Outside };
 enum class ECap : uint8_t { Butt, Round, Square };
 enum class EJoin : uint8_t { Miter, Round, Bevel };
 
-// A path node: the point and its two Bezier handles (equal to the point when that side is straight)
+// A path node: the point and its two Bezier handles (equal to the point when that side is straight).
+// radius rounds a corner node in the outline; the node itself stays where it is.
 struct PathNode {
   Point p{}, in{}, out{};
   ENodeType type = ENodeType::Corner;
+  double radius = 0;
   static PathNode corner(Point p) { return { p, p, p, ENodeType::Corner }; }
 };
 struct Subpath {
@@ -118,8 +120,12 @@ struct VecTree {
 uint64_t newObjectId();
 // Fresh ids for an object and its children (pasted or duplicated copies)
 void renumber(VecObject& o);
-// Objects as paths in local coordinates: shapes become their outline, text its glyph outlines
+// Objects as paths in local coordinates: shapes become their outline, text its glyph outlines, rounded
+// corner nodes their arcs
 std::vector<Subpath> outline(const VecObject& o);
+// The paths with each corner node's radius turned into an arc
+std::vector<Subpath> roundCorners(const std::vector<Subpath>& paths);
+bool hasRoundCorners(const std::vector<Subpath>& paths);
 // Bounds of the outline (and half the stroke when withStroke), in local or world coordinates
 DRect bounds(const VecObject& o, bool world, bool withStroke = false);
 DRect bounds(const std::vector<VecObject>& objects, bool withStroke = false);

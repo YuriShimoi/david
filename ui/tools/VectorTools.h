@@ -20,6 +20,27 @@ private:
   uint64_t _id = 0;
 };
 
+// Smart guides for vector edits: moving points line up, horizontally or vertically, with the box edges,
+// centers and nodes of the other objects (and any extra points). Alt turns it off; grid snap goes first.
+class Snapper {
+public:
+  // Targets from the objects (world coordinates), skipping the ids being moved
+  void begin(const std::vector<VecObject>& objects, const std::vector<uint64_t>& skip, const std::vector<Point>& extra = {});
+  // The offset that lines one of the moving points up with a target on each axis, within tol image pixels
+  // (0 on an axis that found none); remembers the guide lines to draw
+  Point snap(const std::vector<Point>& moving, double tol, bool snapX = true, bool snapY = true);
+  // Off for this frame (Alt held, grid snap): no offset and no lines
+  void idle() { _guides.clear(); }
+  void clear() { _targets.clear(); _guides.clear(); }
+  void draw(ToolHost& h, ImDrawList* dl) const;
+  // Whether this gesture should snap: on a vector layer, grid snap off, Alt up
+  static bool wanted(ToolHost& h, const ToolInput& in);
+private:
+  struct Guide { Point a, b; };
+  std::vector<Point> _targets;
+  std::vector<Guide> _guides;
+};
+
 // The line a drawing tool gives a new object: the color and width, inside the shape like the raster tools
 VecStroke toolStroke(uint32_t color, double width, EStrokeAlign align);
 

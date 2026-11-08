@@ -199,15 +199,25 @@ struct Writer {
       }
       default: {
         e = parent.append_child("path");
-        e.append_attribute("d") = pathData(o.paths).c_str();
+        // Rounded corners: their arcs for every viewer, the nodes and radii in David's attributes
+        bool round = hasRoundCorners(o.paths);
+        e.append_attribute("d") = pathData(round ? roundCorners(o.paths) : o.paths).c_str();
         // Node types, one letter per node (c corner, s smooth, y symmetric), subpaths split by '|'
-        std::string types;
+        std::string types, radii;
         bool any = false;
         for(auto& s : o.paths) {
-          if(!types.empty()) types += '|';
-          for(auto& n : s.nodes) { types += n.type == ENodeType::Smooth ? 's' : n.type == ENodeType::Symmetric ? 'y' : 'c'; any |= n.type != ENodeType::Corner; }
+          if(!types.empty()) { types += '|'; radii += '|'; }
+          for(auto& n : s.nodes) {
+            types += n.type == ENodeType::Smooth ? 's' : n.type == ENodeType::Symmetric ? 'y' : 'c';
+            any |= n.type != ENodeType::Corner;
+            radii += (radii.empty() || radii.back() == '|' ? "" : " ") + num(n.radius);
+          }
         }
         if(any) e.append_attribute("data-david-nodes") = types.c_str();
+        if(round) {
+          e.append_attribute("data-david-d") = pathData(o.paths).c_str();
+          e.append_attribute("data-david-radius") = radii.c_str();
+        }
         break;
       }
     }
@@ -704,8 +714,22 @@ struct Reader {
         o.align = e.attribute("data-david-align").as_int();
       } else {
         o.kind = EVecKind::Path;
-        o.paths = parsePath(e.attribute("d").as_string());
+        pugi::xml_attribute raw = e.attribute("data-david-d");
+        o.paths = parsePath(raw ? raw.as_string() : e.attribute("d").as_string());
         if(o.paths.empty()) return;
+        // Corner radii written by David, subpaths split by '|'
+        if(raw) {
+          std::string radii = e.attribute("data-david-radius").as_string();
+          size_t si = 0, start = 0;
+          while(si < o.paths.size() && start <= radii.size()) {
+            size_t bar = radii.find('|', start);
+            auto rs = numbers(radii.substr(start, bar == std::string::npos ? std::string::npos : bar - start));
+            for(size_t ni = 0; ni < rs.size() && ni < o.paths[si].nodes.size(); ni++) o.paths[si].nodes[ni].radius = rs[ni];
+            if(bar == std::string::npos) break;
+            start = bar + 1;
+            si++;
+          }
+        }
         // Node types written by David
         std::string types = e.attribute("data-david-nodes").as_string();
         size_t si = 0, ni = 0;

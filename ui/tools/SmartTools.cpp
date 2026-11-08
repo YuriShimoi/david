@@ -258,6 +258,7 @@ public:
   void down(ToolHost& h, const ToolInput& in) override {
     Point p{ in.x, in.y };
     if(!_nodes.empty() && hit(h, in)) return;
+    snapPoint(h, in, p, -1);
     if(_curve && !_nodes.empty()) {
       if(in.doubleClick) { commit(h); return; }
       _nodes.push_back({ p, {}, {} });
@@ -282,6 +283,7 @@ public:
       case 0: {
         // Move the node; Shift snaps it against its neighbor
         if(in.shift && _nodes.size() > 1) p = snap15(_nodes[_dragNode == 0 ? 1 : _dragNode - 1].p, p);
+        else snapPoint(h, in, p, _dragNode);
         n.p = p;
         break;
       }
@@ -303,6 +305,7 @@ public:
       case 4: {
         // The first drag: a straight segment
         if(in.shift) p = snap15(_origin, p);
+        else snapPoint(h, in, p, 1);
         _nodes[1].p = p;
         _nodes[0].p = in.alt ? Point{ 2 * _origin.x - p.x, 2 * _origin.y - p.y } : _origin;
         break;
@@ -326,6 +329,7 @@ public:
   }
 
   void up(ToolHost& h, const ToolInput&) override {
+    _snap.idle();
     bool first = _dragPart == 4;
     bool closing = _dragNode >= 0 && _dragPart == 6;
     _dragNode = -1;
@@ -366,6 +370,10 @@ public:
     h.doc().onChanged();
   }
 
+  // While a curve is being drawn, Ctrl+Z takes back its last node like Backspace
+  bool undoable() const override { return _curve && !_nodes.empty(); }
+  bool undo(ToolHost& h) override { return undoable() && onKey(h, ImGuiKey_Backspace); }
+
   bool onKey(ToolHost& h, ImGuiKey k) override {
     if(_nodes.empty()) return false;
     if(k == ImGuiKey_Escape) cancel(h);
@@ -392,6 +400,7 @@ public:
 
   void overlay(ToolHost& h, ImDrawList* dl, const ToolInput& at) override {
     float dpi = h.dpi();
+    _snap.draw(h, dl);
     int hotNode = -1, hotPart = -1;
     if(!_nodes.empty()) nubAt(h, at, hotNode, hotPart);
     for(int i = 0; i < int(_nodes.size()); i++) {
@@ -444,6 +453,19 @@ private:
   const bool _curve;
   LiveEdit _edit;
   LiveObject _live;
+  Snapper _snap;
+
+  // Smart guides on vector layers: p lines up with the other objects and this path's other nodes
+  void snapPoint(ToolHost& h, const ToolInput& in, Point& p, int skipNode) {
+    if(!Snapper::wanted(h, in)) { _snap.idle(); return; }
+    std::vector<Point> own;
+    for(int i = 0; i < int(_nodes.size()); i++) if(i != skipNode) own.push_back(_nodes[i].p);
+    std::vector<uint64_t> skip;
+    if(_live.active()) skip.push_back(_live.id());
+    _snap.begin(vectorTree(h.doc().active(), h.doc().active().frame()).objects, skip, own);
+    Point off = _snap.snap({ p }, 5 * h.dpi() / h.nav().view.zoom);
+    p = { p.x + off.x, p.y + off.y };
+  }
   std::vector<Node> _nodes;
   Point _origin{}, _mid{};
   bool _midSet = false;  // the middle point follows the ends until it is dragged

@@ -268,7 +268,7 @@ void App::setFloating(bool on) {
 
 void App::setupCommands() {
   _commands.beforeEdit = [this] { commitTool(); };
-  auto hasUndo = [this] { return _doc->history.canUndo(); };
+  auto hasUndo = [this] { return _doc->history.canUndo() || tool().undoable() || tool().busy(); };
   auto hasRedo = [this] { return _doc->history.canRedo(); };
   auto hasSel = [this] { return _doc->hasSelection(); };
   auto add = [this](Command c) { _commands.add(std::move(c)); };
@@ -276,13 +276,22 @@ void App::setupCommands() {
   const int CTRL = ImGuiMod_Ctrl, SHIFT = ImGuiMod_Shift, ALT = ImGuiMod_Alt;
   view({ "settings.open", N_("Settings"), ICON_FA_GEAR, { ALT | ImGuiKey_X }, [this] { _showSettings = !_showSettings; } });
 
-  add({ "file.new", N_("New"), ICON_FA_FILE, { CTRL | ImGuiKey_N }, [this] { _popup = "###new"; } });
+  add({ "file.new", N_("New"), ICON_FA_FILE, { CTRL | ImGuiKey_N }, [this] {
+    _newFromClipboard = clipboardImageSize(_newW, _newH);
+    if(!_newFromClipboard) { _newW = _cfg.newW; _newH = _cfg.newH; }
+    _popup = "###new";
+  } });
   add({ "file.open", N_("Open"), ICON_FA_FOLDER_OPEN, { CTRL | ImGuiKey_O }, [this] { confirmDiscard([this] { showOpenDialog(); }); } });
   add({ "file.save", N_("Save"), ICON_FA_FLOPPY_DISK, { CTRL | ImGuiKey_S }, [this] { save(); } });
   add({ "file.saveAs", N_("Save As"), ICON_FA_FILE_EXPORT, { CTRL | SHIFT | ImGuiKey_S }, [this] { saveAs(); } });
   add({ "file.exit", N_("Exit"), ICON_FA_RIGHT_FROM_BRACKET, { CTRL | ImGuiKey_Q }, [this] { requestQuit(); } });
 
-  add({ "edit.undo", N_("Undo"), ICON_FA_ROTATE_LEFT, { CTRL | ImGuiKey_Z }, [this] { _doc->history.undo(*_doc); }, hasUndo, true });
+  add({ "edit.undo", N_("Undo"), ICON_FA_ROTATE_LEFT, { CTRL | ImGuiKey_Z }, [this] {
+    // The Pen's last node goes before the finished edits; anything else pending is finished first
+    if(tool().undo(*this)) return;
+    commitTool();
+    _doc->history.undo(*_doc);
+  }, hasUndo, true, true });
   add({ "edit.redo", N_("Redo"), ICON_FA_ROTATE_RIGHT, { CTRL | ImGuiKey_Y, CTRL | SHIFT | ImGuiKey_Z }, [this] { _doc->history.redo(*_doc); }, hasRedo, true });
   add({ "edit.cut", N_("Cut"), ICON_FA_SCISSORS, { CTRL | ImGuiKey_X }, [this] { copyImage(false, true); }, hasSel });
   add({ "edit.copy", N_("Copy"), ICON_FA_COPY, { CTRL | ImGuiKey_C }, [this] { copyImage(false, false); } });
@@ -406,6 +415,7 @@ void App::setupCommands() {
   view({ "brush.bigger", N_("Brush Width +1"), ICON_FA_CIRCLE_PLUS, { ImGuiKey_RightBracket }, [this] { _cfg.tools.brushSize = std::min(2000, _cfg.tools.brushSize + 1); }, nullptr, true });
   view({ "brush.smaller5", N_("Brush Width -5"), ICON_FA_CIRCLE_MINUS, { CTRL | ImGuiKey_LeftBracket }, [this] { _cfg.tools.brushSize = std::max(1, _cfg.tools.brushSize - 5); }, nullptr, true });
   view({ "brush.bigger5", N_("Brush Width +5"), ICON_FA_CIRCLE_PLUS, { CTRL | ImGuiKey_RightBracket }, [this] { _cfg.tools.brushSize = std::min(2000, _cfg.tools.brushSize + 5); }, nullptr, true });
+  add({ "image.crop", N_("Crop to Selection"), ICON_FA_CROP_SIMPLE, { CTRL | SHIFT | ImGuiKey_X }, [this] { cropToSelection(); }, hasSel });
   add({ "image.resize", N_("Resize Image"), ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER, { CTRL | ImGuiKey_R }, [this] { openSizeDialog(false); } });
   add({ "image.canvas", N_("Canvas Size"), ICON_FA_EXPAND, { CTRL | SHIFT | ImGuiKey_R }, [this] { openSizeDialog(true); } });
   add({ "help.about", N_("About"), ICON_DAVID_LOGO, {}, [this] { _popup = "###about"; } });
@@ -674,7 +684,7 @@ void App::frame() {
   if(!_shotPath.empty()) {
     _shotFrames++;
     if(!_selftestDir.empty()) selftestStep(_shotFrames);
-    if(_shotFrames >= (_selftestDir.empty() ? 20 : 320) && !_reloadAt && !_round2 && !_round3 && !_round4 && !_round5 && !_round6 && !_round7 && !_round8 && !_round9 && !_round10) {
+    if(_shotFrames >= (_selftestDir.empty() ? 20 : 320) && !_reloadAt && !_round2 && !_round3 && !_round4 && !_round5 && !_round6 && !_round7 && !_round8 && !_round9 && !_round10 && !_round11) {
       if(!_selftestDir.empty()) {
         std::ofstream out(pathFromUtf8(_selftestDir + "/selftest.txt"));
         out << _selftestLog;
@@ -744,6 +754,7 @@ void App::drawMenu() {
   }
   // Image holds the view too: zoom, windows, pixel art and animation
   if(ImGui::BeginMenu(tr("Image"))) {
+    _commands.menuItem("image.crop");
     _commands.menuItem("image.resize");
     _commands.menuItem("image.canvas");
     ImGui::Separator();
@@ -918,19 +929,19 @@ void App::drawDialogs() {
     ImGui::SameLine(labelW);
     ImGui::SetNextItemWidth(fieldW);
     if(ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-    ImGui::InputInt("##w", &_cfg.newW, 0);
+    ImGui::InputInt("##w", &_newW, 0);
     ImGui::SameLine();
     ImGui::TextDisabled("%s", tr("pixels"));
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(tr("Height:"));
     ImGui::SameLine(labelW);
     ImGui::SetNextItemWidth(fieldW);
-    ImGui::InputInt("##h", &_cfg.newH, 0);
+    ImGui::InputInt("##h", &_newH, 0);
     ImGui::SameLine();
     ImGui::TextDisabled("%s", tr("pixels"));
     ImGui::PopStyleColor(3);
-    _cfg.newW = std::clamp(_cfg.newW, 1, 65535);
-    _cfg.newH = std::clamp(_cfg.newH, 1, 65535);
+    _newW = std::clamp(_newW, 1, 65535);
+    _newH = std::clamp(_newH, 1, 65535);
     ImGui::Spacing();
     ImGui::Spacing();
     float bw = 100 * _dpi;
@@ -940,7 +951,8 @@ void App::drawDialogs() {
     bool cancel = ui::dialogButton(tr("Cancel"), false, bw) || ImGui::IsKeyPressed(ImGuiKey_Escape) || !newOpen;
     if(ok) {
       ImGui::CloseCurrentPopup();
-      confirmDiscard([this] { setDocument(Document::blank(_cfg.newW, _cfg.newH, WHITE)); });
+      if(!_newFromClipboard) { _cfg.newW = _newW; _cfg.newH = _newH; }
+      confirmDiscard([this, w = _newW, h = _newH] { setDocument(Document::blank(w, h, WHITE)); });
     } else if(cancel) ImGui::CloseCurrentPopup();
     ImGui::EndPopup();
   }

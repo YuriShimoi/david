@@ -166,6 +166,75 @@ uint32_t fromVec(const float v[4]) {
 }
 }
 
+#pragma region [ Smart guides ]
+void Snapper::begin(const std::vector<VecObject>& objects, const std::vector<uint64_t>& skip, const std::vector<Point>& extra) {
+  clear();
+  _targets = extra;
+  for(auto& o : objects) {
+    if(!o.visible || std::find(skip.begin(), skip.end(), o.id) != skip.end()) continue;
+    DRect b = bounds(o, true);
+    if(b.empty()) continue;
+    double cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    for(Point p : { Point{ b.x0, b.y0 }, Point{ b.x1, b.y0 }, Point{ b.x0, b.y1 }, Point{ b.x1, b.y1 }, Point{ cx, cy } }) _targets.push_back(p);
+    if(o.kind == EVecKind::Text || o.kind == EVecKind::Group) continue;
+    for(auto& sp : o.kind == EVecKind::Path ? o.paths : outline(o))
+      for(auto& n : sp.nodes) _targets.push_back(o.xf.apply(n.p));
+  }
+}
+
+Point Snapper::snap(const std::vector<Point>& moving, double tol, bool snapX, bool snapY) {
+  _guides.clear();
+  double bx = tol, by = tol;
+  Point off{};
+  bool hx = false, hy = false;
+  for(const Point& m : moving)
+    for(const Point& t : _targets) {
+      if(snapX && std::abs(t.x - m.x) < bx) { bx = std::abs(t.x - m.x); off.x = t.x - m.x; hx = true; }
+      if(snapY && std::abs(t.y - m.y) < by) { by = std::abs(t.y - m.y); off.y = t.y - m.y; hy = true; }
+    }
+  // A line through every point on the snapped axis, from the farthest one to the other
+  auto guide = [&](bool vertical, double v) {
+    double lo = 1e300, hi = -1e300;
+    auto add = [&](Point p) {
+      double a = vertical ? p.x : p.y, along = vertical ? p.y : p.x;
+      if(std::abs(a - v) > 1e-6) return;
+      lo = std::min(lo, along); hi = std::max(hi, along);
+    };
+    for(const Point& m : moving) add({ m.x + off.x, m.y + off.y });
+    for(const Point& t : _targets) add(t);
+    if(lo <= hi) _guides.push_back(vertical ? Guide{ { v, lo }, { v, hi } } : Guide{ { lo, v }, { hi, v } });
+  };
+  if(hx) {
+    // The snapped x is the target's, so look it up from any moving point that landed on one
+    for(const Point& m : moving)
+      if(std::any_of(_targets.begin(), _targets.end(), [&](const Point& t) { return std::abs(t.x - (m.x + off.x)) < 1e-6; })) { guide(true, m.x + off.x); break; }
+  }
+  if(hy) {
+    for(const Point& m : moving)
+      if(std::any_of(_targets.begin(), _targets.end(), [&](const Point& t) { return std::abs(t.y - (m.y + off.y)) < 1e-6; })) { guide(false, m.y + off.y); break; }
+  }
+  return off;
+}
+
+void Snapper::draw(ToolHost& h, ImDrawList* dl) const {
+  ImU32 col = IM_COL32(255, 80, 160, 230);
+  float dpi = h.dpi();
+  for(auto& g : _guides) {
+    ImVec2 a = h.toScreen(g.a.x, g.a.y), b = h.toScreen(g.b.x, g.b.y);
+    dl->AddLine(a, b, col, std::max(1.f, dpi));
+    for(ImVec2 q : { a, b }) {
+      float r = 3 * dpi;
+      dl->AddLine({ q.x - r, q.y - r }, { q.x + r, q.y + r }, col, std::max(1.f, dpi));
+      dl->AddLine({ q.x - r, q.y + r }, { q.x + r, q.y - r }, col, std::max(1.f, dpi));
+    }
+  }
+}
+
+bool Snapper::wanted(ToolHost& h, const ToolInput& in) {
+  return h.vectorMode() && !in.alt && !(h.settings().grid && h.settings().gridSnap);
+}
+#pragma endregion
+
 #pragma region [ Object tool ]
 // The Mouse tool. On a vector layer (with vector support on) it picks objects: click, Shift-click and a
 // marquee select; dragging moves, the corner nubs scale (Shift keeps the ratio) and the round nub rotates
@@ -223,6 +292,14 @@ public:
         if(!in.shift || dx != 0) dx += sx - x0;
         if(!in.shift || dy != 0) dy += sy - y0;
       }
+      // Smart guides: the box's corners and center line up with the other objects
+      if(Snapper::wanted(h, in) && !_box.empty()) {
+        double cx = (_box.x0 + _box.x1) / 2 + dx, cy = (_box.y0 + _box.y1) / 2 + dy;
+        std::vector<Point> pts = { { _box.x0 + dx, _box.y0 + dy }, { _box.x1 + dx, _box.y0 + dy }, { _box.x0 + dx, _box.y1 + dy },
+                                   { _box.x1 + dx, _box.y1 + dy }, { cx, cy } };
+        Point off = _snap.snap(pts, 5 * h.dpi() / h.nav().view.zoom, !in.shift || dx != 0, !in.shift || dy != 0);
+        dx += off.x; dy += off.y;
+      } else _snap.idle();
       m = Affine::translate(dx, dy);
     } else if(_mode == EMode::Rotate) {
       Point c{ (_box.x0 + _box.x1) / 2, (_box.y0 + _box.y1) / 2 };
@@ -232,6 +309,8 @@ public:
     } else {
       // The opposite corner stays; the dragged one follows the pointer (onto the grid when snap is on)
       snapToGrid(h.settings(), p.x, p.y);
+      if(Snapper::wanted(h, in)) { Point off = _snap.snap({ p }, 5 * h.dpi() / h.nav().view.zoom); p.x += off.x; p.y += off.y; }
+      else _snap.idle();
       Point fixed{ _handle == 1 || _handle == 2 ? _box.x0 : _box.x1, _handle >= 2 ? _box.y0 : _box.y1 };
       Point from{ _handle == 1 || _handle == 2 ? _box.x1 : _box.x0, _handle >= 2 ? _box.y1 : _box.y0 };
       double sx = std::abs(from.x - fixed.x) > 1e-9 ? (p.x - fixed.x) / (from.x - fixed.x) : 1;
@@ -261,6 +340,7 @@ public:
       _change->commit(names[int(_mode)], icon);
       _change.reset();
     }
+    _snap.clear();
     _mode = EMode::None;
   }
 
@@ -268,6 +348,7 @@ public:
   void cancel(ToolHost&) override {
     if(_change) _change->cancel();
     _change.reset();
+    _snap.clear();
     _mode = EMode::None;
   }
 
@@ -291,6 +372,7 @@ public:
     float dpi = h.dpi();
     auto& objs = objectsOf(h);
     ImU32 accent = ImGui::GetColorU32(ImGuiCol_SliderGrab);
+    _snap.draw(h, dl);
     // The object under the pointer, outlined
     if(_mode == EMode::None)
       if(VecObject* o = hitTest(objs, { at.x, at.y }, 4 / h.nav().view.zoom)) {
@@ -337,6 +419,7 @@ private:
   int _handle = -1;
   Point _start{}, _end{};
   DRect _box;
+  Snapper _snap;
   std::unique_ptr<VectorChange> _change;
   std::map<uint64_t, Affine> _startXf;
 
@@ -369,6 +452,7 @@ private:
     _mode = mode;
     _handle = handle;
     _box = selectionBox(h);
+    if(mode != EMode::Rotate) _snap.begin(objectsOf(h), h.doc().selectedObjects);
     _change = std::make_unique<VectorChange>(h.doc());
     _startXf.clear();
     for(uint64_t id : h.doc().selectedObjects)
@@ -447,6 +531,24 @@ public:
       snapToGrid(st, w.x, w.y);
       _end = { _start.x + w.x - w0.x, _start.y + w.y - w0.y };
     }
+    // Smart guides: the moving nodes (or the handle) line up with other nodes and objects
+    if(Snapper::wanted(h, in) && (_drag == EDrag::Nodes || _drag == EDrag::Handle) && _hit.sub < _startPaths.size() && _hit.node < _startPaths[_hit.sub].nodes.size()) {
+      double dx = _end.x - _start.x, dy = _end.y - _start.y;
+      std::vector<Point> pts;
+      if(_drag == EDrag::Nodes) {
+        for(auto& k : _nodes)
+          if(k.sub < _startPaths.size() && k.node < _startPaths[k.sub].nodes.size()) {
+            Point w = o->xf.apply(_startPaths[k.sub].nodes[k.node].p);
+            pts.push_back({ w.x + dx, w.y + dy });
+          }
+      } else {
+        const PathNode& n = _startPaths[_hit.sub].nodes[_hit.node];
+        Point w = o->xf.apply(_hit.kind == EHit::HandleIn ? n.in : n.out);
+        pts.push_back({ w.x + dx, w.y + dy });
+      }
+      Point off = _snap.snap(pts, 5 * h.dpi() / h.nav().view.zoom);
+      _end = { _end.x + off.x, _end.y + off.y };
+    } else _snap.idle();
     Affine inv = o->xf.inverse();
     Point a = inv.apply(_start), b = inv.apply(_end);
     Point d{ b.x - a.x, b.y - a.y };
@@ -498,6 +600,7 @@ public:
       else _change->cancel();
       _change.reset();
     }
+    _snap.clear();
     _drag = EDrag::None;
   }
 
@@ -514,6 +617,7 @@ public:
   void cancel(ToolHost&) override {
     if(_change) _change->cancel();
     _change.reset();
+    _snap.clear();
     _drag = EDrag::None;
   }
 
@@ -542,7 +646,8 @@ public:
     }
     std::vector<Subpath> paths = o->kind == EVecKind::Path ? o->paths : outline(*o);
     ImU32 line = IM_COL32(120, 200, 255, 220);
-    for(auto& s : paths) {
+    // The line follows the rounded corners; the nodes stay where they are
+    for(auto& s : outline(*o)) {
       auto pts = flatten(s, 0.5);
       for(size_t i = 0; i + 1 < pts.size() || (s.closed && i < pts.size() && pts.size() > 1); i++) {
         Point a = o->xf.apply(pts[i]), b = o->xf.apply(pts[(i + 1) % pts.size()]);
@@ -577,6 +682,7 @@ public:
           dl->AddCircleFilled(p, r - 1, fill);
         }
       }
+    _snap.draw(h, dl);
     if(_drag == EDrag::Marquee) {
       ImVec2 a = h.toScreen(_start.x, _start.y), e = h.toScreen(_end.x, _end.y);
       dl->AddRect({ std::min(a.x, e.x), std::min(a.y, e.y) }, { std::max(a.x, e.x), std::max(a.y, e.y) }, IM_COL32(120, 200, 255, 200));
@@ -593,12 +699,7 @@ public:
       ImGui::SameLine(0, 2 * dpi);
       return r;
     };
-    ENodeType cur = ENodeType::Corner;
-    if(!_nodes.empty() && o->kind == EVecKind::Path && _nodes[0].sub < o->paths.size() && _nodes[0].node < o->paths[_nodes[0].sub].nodes.size())
-      cur = o->paths[_nodes[0].sub].nodes[_nodes[0].node].type;
-    if(button("##corner", ICON_TB_ANGLE, N_("Corner node"), cur == ENodeType::Corner)) setType(h, ENodeType::Corner);
-    if(button("##smooth", ICON_TB_WAVE_SINE, N_("Smooth node"), cur == ENodeType::Smooth)) setType(h, ENodeType::Smooth);
-    if(button("##sym", ICON_TB_VECTOR_BEZIER_2, N_("Symmetric node"), cur == ENodeType::Symmetric)) setType(h, ENodeType::Symmetric);
+    if(!_nodes.empty()) { joinButtons(h, *o); ImGui::SameLine(0, 6 * dpi); }
     if(button("##delnode", ICON_FA_MINUS, N_("Delete nodes (Del)"))) removeNodes(h);
     bool closed = o->kind == EVecKind::Path && !o->paths.empty() && o->paths[0].closed;
     if(button("##close", closed ? ICON_FA_LINK_SLASH : ICON_FA_LINK, closed ? N_("Open path") : N_("Close path")))
@@ -606,8 +707,55 @@ public:
     ImGui::NewLine();
   }
 
+  // Join and corner radius of the picked nodes, Gravit style
+  void inspector(ToolHost& h) override {
+    if(!h.vectorMode() || _nodes.empty()) return;
+    const VecObject* o = target(objectsOf(h), h);
+    const PathNode* first = o ? pickedNode(*o) : nullptr;
+    if(!first) return;
+    float dpi = h.dpi();
+    std::string title = std::string(ICON_TB_VECTOR_SPLINE "  ") + tr("Node") + "###node";
+    if(!ImGui::CollapsingHeader(title.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) return;
+    if(!ImGui::BeginTable("##nodet", 2, ImGuiTableFlags_SizingFixedFit)) return;
+    ImGui::TableSetupColumn("##l", ImGuiTableColumnFlags_WidthFixed, 72 * dpi);
+    ImGui::TableSetupColumn("##v", ImGuiTableColumnFlags_WidthStretch);
+    auto row = [](const char* label) {
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextDisabled("%s", tr(label));
+      ImGui::TableNextColumn();
+      ImGui::SetNextItemWidth(-FLT_MIN);
+    };
+    row(N_("Join"));
+    joinButtons(h, *o, ImGui::GetContentRegionAvail().x);
+    row(N_("Corner"));
+    // Live while dragged, one step when let go
+    ImGui::BeginDisabled(first->type != ENodeType::Corner);
+    float r = float(first->radius);
+    if(ui::band("##radius", r, 0, 200, 1, dpi)) {
+      if(!_radiusEdit) {
+        _radiusEdit = std::make_unique<VectorChange>(h.doc());
+        if(VecObject* t = target(_radiusEdit->tree().objects, h)) toPath(*t);
+      }
+      if(VecObject* t = target(_radiusEdit->tree().objects, h))
+        for(auto& k : _nodes)
+          if(k.sub < t->paths.size() && k.node < t->paths[k.sub].nodes.size() && t->paths[k.sub].nodes[k.node].type == ENodeType::Corner)
+            t->paths[k.sub].nodes[k.node].radius = std::max(0.f, r);
+      vectorChanged(h.doc(), h.doc().active(), false);
+    }
+    ImGui::EndDisabled();
+    ImGui::EndTable();
+    if(_radiusEdit && !ImGui::IsAnyItemActive()) {
+      _radiusEdit->commit(N_("Corner Radius"), icon);
+      _radiusEdit.reset();
+    }
+  }
+
 private:
   enum class EHit : uint8_t { None, Node, HandleIn, HandleOut, Segment };
+  // How a node's handles behave: none (straight), mirrored, in one line, or free
+  enum class EJoinType : uint8_t { Straight, Mirrored, Connected, Disconnected };
   enum class EDrag : uint8_t { None, Nodes, Handle, Segment, Marquee };
   struct Key {
     size_t sub, node;
@@ -621,6 +769,54 @@ private:
   Point _start{}, _end{};
   std::unique_ptr<VectorChange> _change;
   std::vector<Subpath> _startPaths;
+  std::unique_ptr<VectorChange> _radiusEdit;
+  Snapper _snap;
+
+  // The first picked node, on the path or the shape's outline
+  const PathNode* pickedNode(const VecObject& o) {
+    static std::vector<Subpath> s_shape;
+    const std::vector<Subpath>* paths = &o.paths;
+    if(o.kind != EVecKind::Path) { s_shape = outline(o); paths = &s_shape; }
+    if(_nodes.empty() || _nodes[0].sub >= paths->size() || _nodes[0].node >= (*paths)[_nodes[0].sub].nodes.size()) return nullptr;
+    return &(*paths)[_nodes[0].sub].nodes[_nodes[0].node];
+  }
+
+  static EJoinType joinOf(const PathNode& n) {
+    if(n.type == ENodeType::Symmetric) return EJoinType::Mirrored;
+    if(n.type == ENodeType::Smooth) return EJoinType::Connected;
+    bool handles = n.in.x != n.p.x || n.in.y != n.p.y || n.out.x != n.p.x || n.out.y != n.p.y;
+    return handles ? EJoinType::Disconnected : EJoinType::Straight;
+  }
+
+  // The four join buttons, drawn like their handles; width 0 = square buttons
+  void joinButtons(ToolHost& h, const VecObject& o, float width = 0) {
+    const PathNode* n = pickedNode(o);
+    EJoinType cur = n ? joinOf(*n) : EJoinType::Straight;
+    float gap = 2 * h.dpi(), fh = ImGui::GetFrameHeight();
+    ImVec2 size{ width > 0 ? std::max(fh, (width - gap * 3) / 4) : fh, fh };
+    static const char* tips[] = { N_("Straight"), N_("Mirrored"), N_("Connected"), N_("Disconnected") };
+    for(int i = 0; i < 4; i++) {
+      if(i) ImGui::SameLine(0, gap);
+      std::string id = "##join" + std::to_string(i);
+      auto draw = [i, dpi = h.dpi()](ImDrawList* dl, ImVec2 a, ImVec2 b, ImU32 col) {
+        // A node in the middle on an arch, with its handles
+        float cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2, s = std::min(b.x - a.x, b.y - a.y) * 0.32f, t = std::max(1.f, dpi);
+        ImVec2 node{ cx, cy - s * 0.35f }, l{ cx - s * 1.4f, cy + s * 0.6f }, r{ cx + s * 1.4f, cy + s * 0.6f };
+        if(i == 0) { dl->AddLine(l, node, col, t); dl->AddLine(node, r, col, t); }
+        else dl->AddBezierCubic(l, { l.x, node.y }, { r.x, node.y }, r, col, t);
+        ImVec2 hl{ node.x - s, node.y }, hr{ node.x + s, node.y };
+        if(i == 2) hl.x = node.x - s * 0.5f;
+        if(i == 3) { hl = { node.x - s * 0.8f, node.y - s * 0.7f }; hr = { node.x + s * 0.8f, node.y - s * 0.7f }; }
+        if(i) {
+          dl->AddLine(hl, node, col, t); dl->AddLine(node, hr, col, t);
+          dl->AddCircleFilled(hl, 1.6f * t, col); dl->AddCircleFilled(hr, 1.6f * t, col);
+        }
+        float q = 2.2f * t;
+        dl->AddRectFilled({ node.x - q, node.y - q }, { node.x + q, node.y + q }, col);
+      };
+      if(ui::drawnButton(id.c_str(), size, cur == EJoinType(i), tr(tips[i]), draw)) setJoin(h, EJoinType(i));
+    }
+  }
 
   static std::vector<VecObject>& objectsOf(ToolHost& h) { return vectorTree(h.doc().active(), h.doc().active().frame()).objects; }
 
@@ -676,6 +872,13 @@ private:
     _startPaths = o->paths;
     _drag = drag;
     _hit = hit;
+    // Smart guides: the other objects, and this path's nodes that aren't moving (a handle's own node too)
+    std::vector<Point> own;
+    for(size_t si = 0; si < _startPaths.size(); si++)
+      for(size_t ni = 0; ni < _startPaths[si].nodes.size(); ni++)
+        if(drag == EDrag::Handle || std::find(_nodes.begin(), _nodes.end(), Key{ si, ni }) == _nodes.end())
+          own.push_back(o->xf.apply(_startPaths[si].nodes[ni].p));
+    _snap.begin(_change->tree().objects, { o->id }, own);
   }
 
   template<class F> void change(ToolHost& h, const char* name, F fn) {
@@ -688,13 +891,16 @@ private:
     ch.commit(name, icon);
   }
 
-  void setType(ToolHost& h, ENodeType type) {
+  void setJoin(ToolHost& h, EJoinType join) {
+    ENodeType type = join == EJoinType::Mirrored ? ENodeType::Symmetric : join == EJoinType::Connected ? ENodeType::Smooth : ENodeType::Corner;
     change(h, N_("Node Type"), [&](VecObject& o) {
       for(auto& k : _nodes) {
         if(k.sub >= o.paths.size() || k.node >= o.paths[k.sub].nodes.size()) continue;
         PathNode& n = o.paths[k.sub].nodes[k.node];
         n.type = type;
-        if(type == ENodeType::Corner) continue;
+        if(join == EJoinType::Straight) { n.in = n.out = n.p; continue; }
+        // Free handles keep their place; a straight node gets the lined-up ones below to start from
+        if(join == EJoinType::Disconnected && joinOf(n) == EJoinType::Disconnected) continue;
         // Line up the handles through the node (straight nodes get handles a third of the way to their neighbors)
         const Subpath& s = o.paths[k.sub];
         size_t cnt = s.nodes.size();

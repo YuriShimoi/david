@@ -11,6 +11,7 @@
 #include <glad/glad.h>
 #include "core/Gradient.h"
 #include "core/io/Png.h"
+#include "core/io/Svg.h"
 #include "platform/Paths.h"
 #include <cmath>
 #include <fstream>
@@ -1175,14 +1176,151 @@ void App::selftestStep(int frame) {
         check("the grid has its own theme color", _theme.grid.w < 0.5f && _theme.grid.w > 0);
         _cfg.betaVector = false;
         _round10 = 0;
+        _round11 = frame;
         break;
       }
     }
   }
 
+  #pragma region [ Round 11: patch fixes ]
+  if(_round11 && frame > _round11) {
+    int f = frame - _round11;
+    auto at = [&](double x, double y) { return toScreen(x, y); };
+    auto objects = [&]() -> std::vector<VecObject>& { return vectorTree(_doc->active(), _doc->activeFrame).objects; };
+    auto clickImg = [&](double x, double y) {
+      ImVec2 a = at(x, y);
+      push(SDL_EVENT_MOUSE_MOTION, a.x, a.y, 0);
+      push(SDL_EVENT_MOUSE_BUTTON_DOWN, a.x, a.y, SDL_BUTTON_LEFT);
+      push(SDL_EVENT_MOUSE_BUTTON_UP, a.x, a.y, SDL_BUTTON_LEFT);
+    };
+    switch(f) {
+      case 1: {
+        _cfg.betaVector = true;
+        setDocument(Document::blank(200, 150, WHITE));
+        _nav.actualSize();
+        _nav.centerOn(100, 75);
+        _commands.run("layer.addVector");
+        // A rounded corner node: two arc nodes in the outline, kept through SVG
+        VecObject o;
+        o.id = newObjectId();
+        Subpath sp;
+        sp.closed = true;
+        for(Point p : { Point{ 20, 20 }, Point{ 80, 20 }, Point{ 80, 80 }, Point{ 20, 80 } }) sp.nodes.push_back(PathNode::corner(p));
+        sp.nodes[0].radius = 10;
+        o.paths = { sp };
+        o.fill = VecPaint::solid(RED);
+        auto out = outline(o);
+        check("a corner radius rounds the node in the outline", out.size() == 1 && out[0].nodes.size() == 5 && std::abs(out[0].nodes[0].p.y - 30) < 1e-6 && std::abs(out[0].nodes[1].p.x - 30) < 1e-6);
+        svg::ReadResult rr;
+        std::string err;
+        bool ok = svg::read(svg::write({ o }, 200, 150), rr, err) && rr.objects.size() == 1 && rr.objects[0].paths.size() == 1;
+        check("the corner radius survives SVG", ok && rr.objects[0].paths[0].nodes.size() == 4 && rr.objects[0].paths[0].nodes[0].radius == 10);
+        // The Pen: Ctrl+Z takes back the last node while drawing
+        use(ETool::Curve);
+        ImVec2 a = at(100, 30), b = at(150, 30);
+        drag(a.x, a.y, b.x, b.y, SDL_BUTTON_LEFT);
+        clickImg(150, 90);
+        break;
+      }
+      case 3: {
+        size_t steps = _doc->history.count();
+        auto& objs = objects();
+        size_t before = objs.empty() || objs.back().paths.empty() ? 0 : objs.back().paths[0].nodes.size();
+        _commands.run("edit.undo");
+        auto& after = objects();
+        size_t now = after.empty() || after.back().paths.empty() ? 0 : after.back().paths[0].nodes.size();
+        check("Ctrl+Z on the Pen drops its last node", before == 3 && now == 2 && tool().busy() && _doc->history.count() == steps);
+        tool().cancel(*this);
+        use(ETool::Mouse);
+        // Crop to Selection
+        _doc->activeLayer = 0;
+        _doc->selection->clear();
+        for(int y = 10; y < 50; y++) _doc->selection->fillSpan(y, 20, 79, 255);
+        _commands.run("image.crop");
+        check("Crop to Selection cuts the canvas to the selection", _doc->width() == 60 && _doc->height() == 40 && !_doc->hasSelection());
+        _commands.run("edit.undo");
+        check("and undo puts it back", _doc->width() == 200 && _doc->height() == 150);
+        // New Image takes the clipboard image's size
+        _doc->selection->clear();
+        for(int y = 0; y < 20; y++) _doc->selection->fillSpan(y, 0, 29, 255);
+        _commands.run("edit.copy");
+        int keepW = _cfg.newW;
+        _commands.run("file.new");
+        _popup.clear();
+        check("New Image takes the clipboard image's size", _newW == 30 && _newH == 20 && _cfg.newW == keepW);
+        _doc->selection->clear();
+        // The Node tool's join and corner rows in the Object window
+        _doc->activeLayer = 1;
+        {
+          VectorChange ch(*_doc);
+          VecObject o;
+          o.id = newObjectId();
+          Subpath sp;
+          sp.closed = true;
+          for(Point p : { Point{ 40, 40 }, Point{ 140, 40 }, Point{ 140, 110 }, Point{ 40, 110 } }) sp.nodes.push_back(PathNode::corner(p));
+          sp.nodes[1].radius = 20;
+          o.paths = { sp };
+          o.fill = VecPaint::solid(RED);
+          ch.tree().objects = { o };
+          ch.tree().touch();
+          ch.commit("Test", "");
+          _doc->selectedObjects = { o.id };
+        }
+        use(ETool::Node);
+        if(ImGuiWindow* w = ImGui::FindWindowByName("###object")) ImGui::FocusWindow(w);
+        clickImg(140, 40);
+        break;
+      }
+      case 6: {
+        const PathNode& n = objects()[0].paths[0].nodes[1];
+        check("the Node tool picks a rounded corner", n.radius == 20 && tool().id == ETool::Node);
+        writeShot(_selftestDir + "/p11-node.png");
+        use(ETool::Mouse);
+        // Smart guides: a box moved near another one's left edge lands on it
+        {
+          VectorChange ch(*_doc);
+          VecObject b;
+          b.id = newObjectId(); b.kind = EVecKind::Rect; b.x = 60; b.y = 120; b.w = 20; b.h = 20;
+          b.fill = VecPaint::solid(RED);
+          ch.tree().objects.push_back(b);
+          ch.tree().touch();
+          ch.commit("Test", "");
+          _doc->selectedObjects = { b.id };
+        }
+        ImVec2 a = at(70, 130), e = at(53, 131);
+        drag(a.x, a.y, e.x, e.y, SDL_BUTTON_LEFT);
+        break;
+      }
+      case 8: {
+        DRect b = bounds(objects()[1], true);
+        check("moving an object snaps it to another object's edge", std::abs(b.x0 - 40) < 1e-6 && std::abs(b.y0 - 121) < 1e-6);
+        _cfg.betaVector = false;
+        // Polygon Lasso corners land on pixel edges; Esc then deselects
+        setDocument(Document::blank(100, 100, WHITE));
+        use(ETool::RectSelect);
+        _cfg.tools.selectShape = 3;
+        for(Point p : { Point{ 10.4, 10.3 }, Point{ 60.6, 10.3 }, Point{ 60.6, 40.7 }, Point{ 10.4, 40.7 } }) {
+          ToolInput in;
+          in.x = p.x; in.y = p.y;
+          tool().down(*this, in);
+          tool().up(*this, in);
+        }
+        tool().onKey(*this, ImGuiKey_Enter);
+        IRect r = _doc->selection->bounds();
+        check("Polygon Lasso corners snap to pixel edges", r.x0 == 10 && r.y0 == 10 && r.x1 == 60 && r.y1 == 40);
+        tool().onKey(*this, ImGuiKey_Escape);
+        check("Esc with a selection tool deselects", !_doc->hasSelection());
+        _cfg.tools.selectShape = 0;
+        _round11 = 0;
+        break;
+      }
+    }
+  }
+  #pragma endregion
+
   // One round on its own: it starts at once, and the rest is skipped
   if(_selftestOnly) {
-    if(frame == 3) { if(_selftestOnly == 8) _round8 = frame; else if(_selftestOnly == 9) _round9 = frame; else if(_selftestOnly == 10) _round10 = frame; }
+    if(frame == 3) { if(_selftestOnly == 8) _round8 = frame; else if(_selftestOnly == 9) _round9 = frame; else if(_selftestOnly == 10) _round10 = frame; else if(_selftestOnly == 11) _round11 = frame; }
     return;
   }
   switch(frame) {

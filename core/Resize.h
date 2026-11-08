@@ -38,5 +38,7 @@ private:
 void resizeImage(Document& doc, int w, int h, double dpi, EResample mode, bool gamma, const char* icon);
 // anchorX/Y: 0 = left/top, 1 = middle, 2 = right/bottom. Only the bottom layer gets the fill.
 void resizeCanvas(Document& doc, int w, int h, int anchorX, int anchorY, uint32_t fill, const char* icon);
+// The canvas cut down to r (inside the image); the selection is dropped
+void cropImage(Document& doc, const IRect& r, const char* icon);
 
 }

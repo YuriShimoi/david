@@ -135,6 +135,16 @@ bool iconButton(const char* id, const char* icon, ImVec2 size, bool on, const ch
   return r;
 }
 
+bool drawnButton(const char* id, ImVec2 size, bool on, const char* tip, const std::function<void(ImDrawList*, ImVec2, ImVec2, ImU32)>& draw) {
+  if(size.x <= 0) size.x = ImGui::GetFrameHeight();
+  if(size.y <= 0) size.y = ImGui::GetFrameHeight();
+  ImU32 col; ImVec2 a, b;
+  bool r = flatFrame(id, size, on, col, a, b);
+  draw(ImGui::GetWindowDrawList(), a, b, col);
+  if(tip && *tip) ImGui::SetItemTooltip("%s", tip);
+  return r;
+}
+
 bool labelButton(const char* id, const char* icon, const char* label, ImVec2 size, bool on, const char* tip) {
   if(size.y <= 0) size.y = ImGui::GetFrameHeight();
   ImU32 col; ImVec2 a, b;

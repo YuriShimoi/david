@@ -302,6 +302,9 @@ void App::drawObjectWindow() {
         if(ImGui::InputTextWithHint("##name", tr("Name"), name, sizeof name)) edit([&](VecObject& o) { o.name = name; });
       } else ImGui::Text("%d %s", int(sel.size()), tr("objects"));
 
+      // The tool's own sections first (the Node tool's picked nodes)
+      tool().inspector(*this);
+
       // Place and size of the picked objects' box; the angle of a single object
       DRect box;
       for(uint64_t id : sel) if(const VecObject* o = findObject(objs, id)) box.add(bounds(*o, true));
@@ -382,14 +385,6 @@ void App::drawObjectWindow() {
           int align = int(st.align);
           const char* aligns[] = { tr("Center"), tr("Inside"), tr("Outside") };
           if(ImGui::Combo("##align", &align, aligns, 3)) edit([&](VecObject& o) { o.stroke.align = EStrokeAlign(align); });
-          rowStart(N_("Ends"));
-          int cap = int(st.cap);
-          const char* caps[] = { tr("Flat"), tr("Round"), tr("Square") };
-          if(ImGui::Combo("##cap", &cap, caps, 3)) edit([&](VecObject& o) { o.stroke.cap = ECap(cap); });
-          rowStart(N_("Corners"));
-          int join = int(st.join);
-          const char* joins[] = { tr("Miter"), tr("Round"), tr("Bevel") };
-          if(ImGui::Combo("##join", &join, joins, 3)) edit([&](VecObject& o) { o.stroke.join = EJoin(join); });
           rowStart(N_("Dash"));
           int dash = 0;
           for(int i = 0; i < 3; i++) if(st.dash == DASHES[i]) dash = i;

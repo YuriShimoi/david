@@ -142,6 +142,11 @@ public:
   virtual void onText(ToolHost&, unsigned int) {}
   virtual void overlay(ToolHost&, ImDrawList*, const ToolInput& hover) {}
   virtual void options(ToolHost&) {}
+  // Sections the tool adds to the Object window (the Node tool's picked nodes)
+  virtual void inspector(ToolHost&) {}
+  // Ctrl+Z while the tool has an edit going: true when it took back a step of its own (the Pen's last node)
+  virtual bool undoable() const { return false; }
+  virtual bool undo(ToolHost&) { return false; }
   // The pointer to show over the canvas at this hover position
   virtual ECursor cursor(ToolHost&, const ToolInput&) { return ECursor::Icon; }
   // Pressing the tool's key again: true when the tool moved to its next variant itself (selection shapes)
