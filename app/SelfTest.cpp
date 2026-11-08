@@ -1295,6 +1295,22 @@ void App::selftestStep(int frame) {
         DRect b = bounds(objects()[1], true);
         check("moving an object snaps it to another object's edge", std::abs(b.x0 - 40) < 1e-6 && std::abs(b.y0 - 121) < 1e-6);
         _cfg.betaVector = false;
+        // Polygon Lasso corners land on pixel edges; Esc then deselects
+        setDocument(Document::blank(100, 100, WHITE));
+        use(ETool::RectSelect);
+        _cfg.tools.selectShape = 3;
+        for(Point p : { Point{ 10.4, 10.3 }, Point{ 60.6, 10.3 }, Point{ 60.6, 40.7 }, Point{ 10.4, 40.7 } }) {
+          ToolInput in;
+          in.x = p.x; in.y = p.y;
+          tool().down(*this, in);
+          tool().up(*this, in);
+        }
+        tool().onKey(*this, ImGuiKey_Enter);
+        IRect r = _doc->selection->bounds();
+        check("Polygon Lasso corners snap to pixel edges", r.x0 == 10 && r.y0 == 10 && r.x1 == 60 && r.y1 == 40);
+        tool().onKey(*this, ImGuiKey_Escape);
+        check("Esc with a selection tool deselects", !_doc->hasSelection());
+        _cfg.tools.selectShape = 0;
         _round11 = 0;
         break;
       }

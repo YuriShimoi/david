@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - New Image starts at the clipboard image's size when the clipboard holds one; that size isn't kept as the default.
 - Ctrl+Z while drawing with the Pen takes back the last node instead of an earlier edit.
+- Polygon Lasso corners snap to pixel edges, like the rectangle select.
+- Esc with a selection tool (and with the Move tools when no move is pending) deselects.
 
 ### Removed
 - The Ends and Corners fields of the Object window's Border section.
